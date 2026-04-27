@@ -1,0 +1,36 @@
+[
+  {
+    "id": "1773591970870",
+    "createdAt": 1773591971670,
+    "name": "Okra",
+    "category": "Vegetables",
+    "price": "20",
+    "stock": "30 per kg In Stock",
+    "freshness": "1 day",
+    "unit": "per kg",
+    "status": "Available",
+    "description": "HAHAHA",
+    "image": null,
+    "farmerId": "1772300351302",
+    "farmerName": "Renz",
+    "farmName": "Ahab",
+    "rating": 0
+  },
+  {
+    "id": "1773592051568",
+    "createdAt": 1773592052376,
+    "name": "EGGPLANT",
+    "category": "Vegetables",
+    "price": "70",
+    "stock": "80 per kg In Stock",
+    "freshness": "1 day",
+    "unit": "per kg",
+    "status": "Available",
+    "description": "Ewab",
+    "image": null,
+    "farmerId": "1772997649894",
+    "farmerName": "Galoy",
+    "farmName": "Galoy",
+    "rating": 0
+  }
+]

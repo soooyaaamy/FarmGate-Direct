@@ -1,0 +1,21 @@
+[
+  {
+    "buyerId": "1772300771092",
+    "buyerName": "Pepe",
+    "farmers": [
+      {
+        "farmerId": "1772300351302",
+        "farmName": "Ahab",
+        "products": [
+          {
+            "id": "1773591970870",
+            "name": "Okra",
+            "price": "20",
+            "image": null,
+            "quantity": 1
+          }
+        ]
+      }
+    ]
+  }
+]
