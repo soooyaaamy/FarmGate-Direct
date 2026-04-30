@@ -1,372 +1,261 @@
-import { FontAwesome5, MaterialCommunityIcons } from "@expo/vector-icons";
+/**
+ * orders.tsx — Orders Tab
+ * Search bar + status filter + "New" badges + tap → Order Details
+ */
+
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useState, useMemo, useCallback, useRef } from "react";
 import {
-  Alert,
-  FlatList,
-  Text,
-  TouchableOpacity,
-  useWindowDimensions,
-  View,
-  ScrollView,
+  View, Text, TextInput, TouchableOpacity, FlatList,
+  Animated, useWindowDimensions,
 } from "react-native";
+import { useHomeData } from "../../hooks/UseHomeData";
+import type { RecentOrder, OrderStatus } from "../../hooks/UseHomeData";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+const STATUS_BAR = Constants.statusBarHeight ?? 44;
 
-type OrderStatus = "Pending" | "Accepted" | "Delivered" | "Declined" | "Cancelled";
+type FilterKey = "All" | OrderStatus;
 
-interface Order {
-  id: string;
-  buyerId: string;
-  buyerName: string;
-  productName: string;
-  quantity: number;
-  totalPrice: number;
-  status: OrderStatus;
-  createdAt?: string;
-}
+const FILTERS: FilterKey[] = ["All", "New", "Packing", "Ready", "Delivered", "Cancelled"];
 
-// ─── Status config ────────────────────────────────────────────────────────────
-
-const STATUS_CONFIG: Record<OrderStatus, { label: string; bg: string; text: string; dot: string }> = {
-  Pending:   { label: "Pending",   bg: "#fef3c7", text: "#b45309", dot: "#f59e0b" },
-  Accepted:  { label: "Accepted",  bg: "#dcfce7", text: "#15803d", dot: "#22c55e" },
-  Delivered: { label: "Delivered", bg: "#dbeafe", text: "#1d4ed8", dot: "#3b82f6" },
-  Declined:  { label: "Declined",  bg: "#fee2e2", text: "#b91c1c", dot: "#ef4444" },
-  Cancelled: { label: "Cancelled", bg: "#f3f4f6", text: "#6b7280", dot: "#9ca3af" },
+const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
+  New:       { bg: "#f0fdf4", text: "#15803d" },
+  Packing:   { bg: "#eff6ff", text: "#1d4ed8" },
+  Ready:     { bg: "#f5f3ff", text: "#7c3aed" },
+  Delivered: { bg: "#f3f4f6", text: "#6b7280" },
+  Cancelled: { bg: "#fef2f2", text: "#dc2626" },
 };
 
-const FILTERS: (OrderStatus | "All")[] = ["All", "Pending", "Accepted", "Delivered", "Declined", "Cancelled"];
+// ─── Order row ────────────────────────────────────────────────────────────────
 
-// ─── Sample Orders ────────────────────────────────────────────────────────────
-
-const INITIAL_ORDERS: Order[] = [
-  { id: "1", buyerId: "b1", buyerName: "Anna Reyes",      productName: "Fresh Tomatoes", quantity: 2,  totalPrice: 240, status: "Pending",   createdAt: "2024-01-22T10:00:00Z" },
-  { id: "2", buyerId: "b2", buyerName: "Carlos Mendoza",  productName: "Lettuce",        quantity: 5,  totalPrice: 300, status: "Pending",   createdAt: "2024-01-22T09:30:00Z" },
-  { id: "3", buyerId: "b3", buyerName: "Lina Garcia",     productName: "Eggplant",       quantity: 3,  totalPrice: 240, status: "Accepted",  createdAt: "2024-01-21T08:00:00Z" },
-  { id: "4", buyerId: "b4", buyerName: "Marco Dela Cruz", productName: "Sweet Corn",     quantity: 10, totalPrice: 350, status: "Delivered", createdAt: "2024-01-21T07:00:00Z" },
-  { id: "5", buyerId: "b5", buyerName: "Sofia Bautista",  productName: "Mango",          quantity: 4,  totalPrice: 240, status: "Cancelled", createdAt: "2024-01-20T06:00:00Z" },
-  { id: "6", buyerId: "b6", buyerName: "Jose Ramos",      productName: "Banana",         quantity: 6,  totalPrice: 210, status: "Declined",  createdAt: "2024-01-22T11:00:00Z" },
-];
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const getInitials = (name: string) =>
-  name ? name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2) : "?";
-
-const getAvatarColor = (name: string) => {
-  const colors = ["#bbf7d0", "#bfdbfe", "#fde68a", "#fbcfe8", "#e9d5ff"];
-  return colors[name ? name.charCodeAt(0) % colors.length : 0];
-};
-
-const getAvatarText = (name: string) => {
-  const textColors = ["#15803d", "#1d4ed8", "#b45309", "#be185d", "#6d28d9"];
-  return textColors[name ? name.charCodeAt(0) % textColors.length : 0];
-};
-
-// ─── Order Card ───────────────────────────────────────────────────────────────
-
-const OrderCard = ({
-  item,
-  onPress,
-  onAccept,
-  onDecline,
-}: {
-  item: Order;
-  onPress: () => void;
-  onAccept?: () => void;
-  onDecline?: () => void;
-}) => {
-  const cfg = STATUS_CONFIG[item.status] ?? STATUS_CONFIG.Pending;
-  const isPending = item.status === "Pending";
+const OrderRow = React.memo(({
+  order, onPress, isLast,
+}: { order: RecentOrder; onPress: () => void; isLast: boolean }) => {
+  const sc    = STATUS_STYLE[order.status] ?? STATUS_STYLE.New;
+  const isNew = order.status === "New";
 
   return (
     <TouchableOpacity
-      onPress={onPress}
-      activeOpacity={0.85}
+      onPress={onPress} activeOpacity={0.72}
       style={{
-        backgroundColor: "#fff",
-        borderRadius: 16,
-        marginBottom: 10,
-        borderWidth: 1,
-        borderColor: "#f3f4f6",
-        overflow: "hidden",
+        flexDirection: "row", alignItems: "center", gap: 12,
+        paddingHorizontal: 16, paddingVertical: 13,
+        backgroundColor: isNew ? "#fafffe" : "#fff",
+        borderBottomWidth: isLast ? 0 : 1, borderBottomColor: "#f3f4f6",
       }}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", padding: 14, gap: 12 }}>
-        {/* Avatar */}
-        <View style={{
-          width: 46, height: 46, borderRadius: 23,
-          backgroundColor: getAvatarColor(item.buyerName),
-          alignItems: "center", justifyContent: "center", flexShrink: 0,
-        }}>
-          <Text style={{ fontWeight: "700", fontSize: 15, color: getAvatarText(item.buyerName) }}>
-            {getInitials(item.buyerName)}
-          </Text>
-        </View>
+      <View style={{
+        width: 40, height: 40, borderRadius: 20,
+        backgroundColor: order.avatarColor + "18",
+        alignItems: "center", justifyContent: "center",
+      }}>
+        <Text style={{ fontSize: 12, fontWeight: "800", color: order.avatarColor }}>
+          {order.initials}
+        </Text>
+      </View>
 
-        {/* Info */}
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ fontWeight: "700", fontSize: 14, color: "#111827" }} numberOfLines={1}>
-            {item.buyerName}
+      <View style={{ flex: 1 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Text style={{ fontSize: 13, fontWeight: "700", color: "#111827" }}>
+            {order.customerName}
           </Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 3 }}>
-            <MaterialCommunityIcons name="package-variant-closed" size={13} color="#9ca3af" />
-            <Text style={{ fontSize: 12, color: "#6b7280" }} numberOfLines={1}>
-              {item.productName} × {item.quantity}
-            </Text>
-          </View>
-          <Text style={{ fontSize: 13, fontWeight: "700", color: "#15803d", marginTop: 3 }}>
-            ₱{item.totalPrice.toLocaleString()}
-          </Text>
+          {isNew && (
+            <View style={{ backgroundColor: "#166534", borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1.5 }}>
+              <Text style={{ fontSize: 9, fontWeight: "800", color: "#fff" }}>NEW</Text>
+            </View>
+          )}
         </View>
+        <Text style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }} numberOfLines={1}>
+          {order.item}
+        </Text>
+      </View>
 
-        {/* Status badge + chevron */}
-        <View style={{ alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
-          <View style={{ backgroundColor: cfg.bg, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
-            <Text style={{ fontSize: 11, fontWeight: "700", color: cfg.text }}>
-              {cfg.label}
-            </Text>
-          </View>
-          <FontAwesome5 name="chevron-right" size={11} color="#d1d5db" />
+      <View style={{ alignItems: "flex-end" }}>
+        <Text style={{ fontSize: 13, fontWeight: "700", color: "#111827" }}>{order.price}</Text>
+        <View style={{ backgroundColor: sc.bg, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3, marginTop: 4 }}>
+          <Text style={{ fontSize: 10, fontWeight: "700", color: sc.text }}>{order.status}</Text>
         </View>
       </View>
 
-      {/* Accept / Decline buttons — only for Pending */}
-      {isPending && (
-        <View style={{
-          flexDirection: "row",
-          gap: 8,
-          paddingHorizontal: 14,
-          paddingBottom: 14,
-        }}>
-          <TouchableOpacity
-            onPress={onDecline}
-            style={{
-              flex: 1,
-              paddingVertical: 8,
-              borderRadius: 10,
-              borderWidth: 1.5,
-              borderColor: "#fca5a5",
-              backgroundColor: "#fff1f2",
-              alignItems: "center",
-            }}
-          >
-            <Text style={{ fontSize: 13, fontWeight: "700", color: "#ef4444" }}>Decline</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={onAccept}
-            style={{
-              flex: 1,
-              paddingVertical: 8,
-              borderRadius: 10,
-              backgroundColor: "#166534",
-              alignItems: "center",
-            }}
-          >
-            <Text style={{ fontSize: 13, fontWeight: "700", color: "#fff" }}>Accept</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      <MaterialCommunityIcons name="chevron-right" size={16} color="#e5e7eb" />
     </TouchableOpacity>
   );
-};
+});
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+OrderRow.displayName = "OrderRow";
 
-const Orders = () => {
+// ─── Main ─────────────────────────────────────────────────────────────────────
+
+const OrdersScreen = () => {
   const router = useRouter();
-  const { height: SCREEN_HEIGHT } = useWindowDimensions();
-  const STATUS_BAR = Constants.statusBarHeight ?? 44;
+  const { recentOrders, loading } = useHomeData();
+  useWindowDimensions();
 
-  const [orders, setOrders] = useState<Order[]>(INITIAL_ORDERS);
-  const [activeFilter, setActiveFilter] = useState<OrderStatus | "All">("All");
+  const [query,        setQuery]        = useState("");
+  const [activeFilter, setActiveFilter] = useState<FilterKey>("All");
+  const [searchFocused, setSearchFocused] = useState(false);
 
-  const countOf = (status: OrderStatus | "All"): number =>
-    status === "All" ? orders.length : orders.filter((o) => o.status === status).length;
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const headerScale = scrollY.interpolate({ inputRange: [0, 80], outputRange: [1, 0.97], extrapolate: "clamp" });
 
-  const filteredOrders = activeFilter === "All"
-    ? orders
-    : orders.filter((o) => o.status === activeFilter);
+  // Count per status for filter badges
+  const counts = useMemo(() => {
+    const c: Partial<Record<FilterKey, number>> = { All: recentOrders.length };
+    recentOrders.forEach((o: RecentOrder) => { c[o.status] = (c[o.status] ?? 0) + 1; });
+    return c;
+  }, [recentOrders]);
 
-  const updateStatus = (id: string, status: OrderStatus) => {
-    setOrders((prev) =>
-      prev.map((o) => o.id === id ? { ...o, status } : o)
-    );
-  };
+  const filtered = useMemo(() => {
+    let list = activeFilter === "All" ? recentOrders : recentOrders.filter((o: RecentOrder) => o.status === activeFilter);
+    if (query.trim()) {
+      const q = query.toLowerCase();
+      list = list.filter((o: RecentOrder) =>
+        o.customerName.toLowerCase().includes(q) ||
+        o.item.toLowerCase().includes(q) ||
+        o.id.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [recentOrders, activeFilter, query]);
 
-  const handleAccept = (item: Order) => {
-    Alert.alert(
-      "Accept Order",
-      `Accept order from ${item.buyerName} for ${item.productName}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Accept",
-          onPress: () => updateStatus(item.id, "Accepted"),
-        },
-      ]
-    );
-  };
-
-  const handleDecline = (item: Order) => {
-    Alert.alert(
-      "Decline Order",
-      `Decline order from ${item.buyerName} for ${item.productName}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Decline",
-          style: "destructive",
-          onPress: () => updateStatus(item.id, "Declined"),
-        },
-      ]
-    );
-  };
+  const renderItem = useCallback(({ item, index }: { item: RecentOrder; index: number }) => (
+    <OrderRow
+      order={item}
+      onPress={() => router.push(`/farmer/orders/${item.id}` as any)}
+      isLast={index === filtered.length - 1}
+    />
+  ), [filtered.length, router]);
 
   return (
     <View style={{ flex: 1, backgroundColor: "#166534" }}>
-      <ScrollView showsVerticalScrollIndicator={false}>
 
-        {/* ── GREEN HEADER ── */}
-        <View style={{ paddingTop: STATUS_BAR + 16, paddingHorizontal: 20, paddingBottom: 32, backgroundColor: "#166534" }}>
-
-          <Text style={{ color: "white", fontWeight: "700", fontSize: 26, lineHeight: 32, marginBottom: 20 }}>
-            My Orders
-          </Text>
-
-          {/* Stats strip */}
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <View style={{ flex: 1, backgroundColor: "#fff", borderRadius: 16, padding: 12 }}>
-              <Text style={{ color: "#f59e0b", fontWeight: "700", fontSize: 22, lineHeight: 26 }}>
-                {countOf("Pending")}
-              </Text>
-              <Text style={{ color: "#9ca3af", fontSize: 10, fontWeight: "600", marginTop: 2 }}>
-                New Orders
-              </Text>
-            </View>
-            <View style={{ flex: 1, backgroundColor: "#fff", borderRadius: 16, padding: 12 }}>
-              <Text style={{ color: "#15803d", fontWeight: "700", fontSize: 22, lineHeight: 26 }}>
-                {countOf("Accepted")}
-              </Text>
-              <Text style={{ color: "#9ca3af", fontSize: 10, fontWeight: "600", marginTop: 2 }}>
-                Accepted
-              </Text>
-            </View>
-            <View style={{ flex: 1, backgroundColor: "#fff", borderRadius: 16, padding: 12 }}>
-              <Text style={{ color: "#1d4ed8", fontWeight: "700", fontSize: 22, lineHeight: 26 }}>
-                {countOf("Delivered")}
-              </Text>
-              <Text style={{ color: "#9ca3af", fontSize: 10, fontWeight: "600", marginTop: 2 }}>
-                Delivered
-              </Text>
-            </View>
-            <View style={{ flex: 1, backgroundColor: "#fff", borderRadius: 16, padding: 12 }}>
-              <Text style={{ color: "#ef4444", fontWeight: "700", fontSize: 22, lineHeight: 26 }}>
-                {countOf("Declined")}
-              </Text>
-              <Text style={{ color: "#9ca3af", fontSize: 10, fontWeight: "600", marginTop: 2 }}>
-                Declined
-              </Text>
-            </View>
+      {/* Green header */}
+      <Animated.View style={{
+        paddingTop: STATUS_BAR + 12,
+        paddingHorizontal: 18, paddingBottom: 20,
+        backgroundColor: "#166534",
+        transform: [{ scale: headerScale }],
+      }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <View>
+            <Text style={{ color: "rgba(255,255,255,0.6)", fontSize: 11, fontWeight: "600" }}>Farmer Hub</Text>
+            <Text style={{ color: "#fff", fontSize: 20, fontWeight: "800" }}>Orders</Text>
           </View>
+          {counts.New ? (
+            <View style={{ backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, borderWidth: 1, borderColor: "rgba(255,255,255,0.14)" }}>
+              <Text style={{ color: "#fff", fontSize: 12, fontWeight: "700" }}>
+                {counts.New} new
+              </Text>
+            </View>
+          ) : null}
         </View>
 
-        {/* ── WHITE ROUNDED BODY ── */}
+        {/* Search bar */}
         <View style={{
-          backgroundColor: "#f3f4f6",
-          borderTopLeftRadius: 35,
-          borderTopRightRadius: 35,
-          paddingHorizontal: 16,
-          paddingTop: 20,
-          marginTop: -20,
-          minHeight: SCREEN_HEIGHT,
+          flexDirection: "row", alignItems: "center", gap: 10,
+          backgroundColor: searchFocused ? "#fff" : "rgba(255,255,255,0.92)",
+          borderRadius: 14, paddingHorizontal: 13, paddingVertical: 9,
         }}>
+          <MaterialCommunityIcons name="magnify" size={18} color="#9ca3af" />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search by name, item, order ID…"
+            placeholderTextColor="#9ca3af"
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
+            style={{ flex: 1, fontSize: 13, color: "#111827", padding: 0 }}
+          />
+          {query.length > 0 && (
+            <TouchableOpacity onPress={() => setQuery("")}>
+              <MaterialCommunityIcons name="close-circle" size={16} color="#9ca3af" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </Animated.View>
 
-          {/* Filter tabs */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={{ flexGrow: 0, marginBottom: 14 }}
-            contentContainerStyle={{ gap: 8, paddingRight: 4, alignItems: "center" }}
-          >
-            {FILTERS.map((filter) => {
-              const isActive = activeFilter === filter;
-              const count = countOf(filter);
-              const cfg = filter !== "All" ? STATUS_CONFIG[filter as OrderStatus] : null;
-              return (
-                <TouchableOpacity
-                  key={filter}
-                  onPress={() => setActiveFilter(filter)}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 6,
-                    height: 36,
-                    borderRadius: 20,
-                    paddingHorizontal: 14,
-                    borderWidth: 1.5,
-                    borderColor: isActive ? "#166534" : "#e5e7eb",
-                    backgroundColor: isActive ? "#166534" : "#fff",
-                  }}
-                >
-                  {cfg && !isActive && (
-                    <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: cfg.dot }} />
-                  )}
-                  <Text style={{ fontSize: 12, fontWeight: "700", color: isActive ? "#fff" : "#6b7280" }}>
-                    {filter}
-                  </Text>
-                  <View style={{ borderRadius: 20, paddingHorizontal: 6, paddingVertical: 1, backgroundColor: isActive ? "rgba(255,255,255,0.2)" : "#f0fdf4" }}>
-                    <Text style={{ fontSize: 10, fontWeight: "700", color: isActive ? "#fff" : "#15803d" }}>
+      {/* White body */}
+      <View style={{ flex: 1, backgroundColor: "#f3f4f6", borderTopLeftRadius: 28, borderTopRightRadius: 28, marginTop: -14 }}>
+
+        {/* Status filter tabs */}
+        <Animated.ScrollView
+          horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 14, paddingTop: 14, paddingBottom: 10, gap: 8 }}
+          onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollY } } }], { useNativeDriver: true })}
+        >
+          {FILTERS.map(f => {
+            const active = activeFilter === f;
+            const count  = counts[f] ?? 0;
+            return (
+              <TouchableOpacity
+                key={f}
+                onPress={() => setActiveFilter(f)}
+                style={{
+                  height: 32,
+                  paddingHorizontal: 12,
+                  borderRadius: 16, alignItems: "center", justifyContent: "center",
+                  flexDirection: "row", gap: 5,
+                  backgroundColor: active ? "#166534" : "#fff",
+                  borderWidth: 1, borderColor: active ? "#166534" : "#e5e7eb",
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={{ fontSize: 11, fontWeight: "700", color: active ? "#fff" : "#6b7280" }}>
+                  {f}
+                </Text>
+                {count > 0 && (
+                  <View style={{
+                    backgroundColor: active ? "rgba(255,255,255,0.2)" : "#f3f4f6",
+                    borderRadius: 8, paddingHorizontal: 5, paddingVertical: 1.5,
+                  }}>
+                    <Text style={{ fontSize: 9, fontWeight: "800", color: active ? "#fff" : "#6b7280" }}>
                       {count}
                     </Text>
                   </View>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </Animated.ScrollView>
 
-          {/* Order list */}
-          {filteredOrders.length === 0 ? (
-            <View style={{ alignItems: "center", paddingTop: 60, paddingBottom: 40 }}>
-              <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: "#dcfce7", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
-                <MaterialCommunityIcons name="clipboard-text-off-outline" size={32} color="#15803d" />
-              </View>
-              <Text style={{ fontSize: 16, fontWeight: "700", color: "#374151", marginBottom: 6 }}>
-                No orders yet
-              </Text>
-              <Text style={{ fontSize: 13, color: "#9ca3af", textAlign: "center", lineHeight: 20 }}>
-                {activeFilter === "All"
-                  ? "You have no orders at the moment."
-                  : `No ${activeFilter.toLowerCase()} orders found.`}
-              </Text>
-            </View>
-          ) : (
-            <FlatList
-              data={filteredOrders}
-              keyExtractor={(item) => item.id}
-              scrollEnabled={false}
-              renderItem={({ item }) => (
-                <OrderCard
-                  item={item}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/farmer/orders/[id]",
-                      params: { id: item.id, order: JSON.stringify(item) },
-                    })
-                  }
-                  onAccept={() => handleAccept(item)}
-                  onDecline={() => handleDecline(item)}
-                />
-              )}
-              contentContainerStyle={{ paddingBottom: 100 }}
-            />
-          )}
+        {/* Results header */}
+        <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+          <Text style={{ fontSize: 11, color: "#9ca3af", fontWeight: "600" }}>
+            {filtered.length} order{filtered.length !== 1 ? "s" : ""}
+            {query ? ` matching "${query}"` : ""}
+          </Text>
         </View>
-      </ScrollView>
+
+        {/* Order list */}
+        {loading ? (
+          <View style={{ padding: 20 }}>
+            {[1,2,3,4].map(i => (
+              <View key={i} style={{ height: 64, backgroundColor: "#e5e7eb", borderRadius: 12, marginBottom: 8 }} />
+            ))}
+          </View>
+        ) : filtered.length === 0 ? (
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingBottom: 100 }}>
+            <Text style={{ fontSize: 36 }}>📦</Text>
+            <Text style={{ fontSize: 14, fontWeight: "700", color: "#374151", marginTop: 10 }}>No orders found</Text>
+            <Text style={{ fontSize: 12, color: "#9ca3af", marginTop: 4 }}>Try a different filter or search term</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={filtered}
+            keyExtractor={item => item.id}
+            renderItem={renderItem}
+            contentContainerStyle={{
+              backgroundColor: "#fff", borderRadius: 18,
+              marginHorizontal: 14, overflow: "hidden", marginBottom: 24,
+            }}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
+      </View>
     </View>
   );
 };
 
-export default Orders;
+export default OrdersScreen;

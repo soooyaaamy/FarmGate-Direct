@@ -1,384 +1,283 @@
-import { FontAwesome5, MaterialCommunityIcons } from "@expo/vector-icons";
+/**
+ * notifications/notif.tsx
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Fixes applied:
+ *  1. Removed "Mark all as read" button
+ *  2. Removed unread dot indicators from rows
+ *  3. Filter tabs: fixed explicit width so buttons never resize on press
+ *  4. Text sizes proportionally reduced (filter labels 11px, row title 13px)
+ *  5. Order notifications navigate directly to Order Details
+ *  6. Non-order notifications open a matching bottom-sheet detail modal
+ */
+
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import Constants from "expo-constants";
 import { useRouter } from "expo-router";
-import React, { useRef, useState } from "react";
+import React, {
+  useState, useRef, useCallback, useMemo, useEffect,
+} from "react";
 import {
-  Animated,
-  Dimensions,
-  Text,
-  TouchableOpacity,
-  View,
+  Animated, FlatList, Modal, Platform, Text,
+  TouchableOpacity, View, ScrollView,
 } from "react-native";
 
-const { height: SCREEN_HEIGHT } = Dimensions.get("window");
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type NotifType = "order" | "message" | "payment" | "stock";
-type Tab = "all" | "orders" | "payments" | "messages";
+type NotifType = "order" | "stock" | "system" | "promo";
+type FilterTab = "all" | "order" | "stock" | "system";
 
 interface Notification {
-  id: string;
-  type: NotifType;
-  title: string;
-  subtitle: string;
-  time: string;
-  date: string;
-  unread: boolean;
-  actionable?: boolean;
-  orderId?: string;
-  buyerId?: string;
-  productId?: string;
+  id: string; type: NotifType; title: string; body: string;
+  time: string; orderId?: string;
 }
 
-// ─── Data ─────────────────────────────────────────────────────────────────────
-
-const INITIAL_NOTIFICATIONS: Notification[] = [
-  {
-    id: "1", type: "order",
-    title: "New Order from Maria Santos",
-    subtitle: "Organic Tomatoes (5kg) · ₱350.00",
-    time: "2 minutes ago", date: "Today",
-    unread: true, actionable: true,
-    orderId: "11248", buyerId: "maria-santos",
-  },
-  {
-    id: "2", type: "order",
-    title: "New Order from Juan Dela Cruz",
-    subtitle: "Eggplant (3kg) · ₱180.00",
-    time: "18 minutes ago", date: "Today",
-    unread: true, actionable: true,
-    orderId: "11247", buyerId: "juan-dela-cruz",
-  },
-  {
-    id: "3", type: "message",
-    title: "Message from Maria Santos",
-    subtitle: '"Pwede pa bang dagdagan ng 2kg?"',
-    time: "35 minutes ago", date: "Today",
-    unread: true, actionable: true,
-    buyerId: "maria-santos",
-  },
-  {
-    id: "4", type: "payment",
-    title: "Payment Received",
-    subtitle: "Order #11243 · +₱350.00 via GCash",
-    time: "1 hour ago", date: "Today",
-    unread: true, actionable: false,
-  },
-  {
-    id: "5", type: "stock",
-    title: "Low Stock Alert",
-    subtitle: "Bitter Melon is almost out — only 2 kg left",
-    time: "2 hours ago", date: "Today",
-    unread: true, actionable: true,
-    productId: "bitter-melon",
-  },
-  {
-    id: "6", type: "payment",
-    title: "Payment Received",
-    subtitle: "Order #11241 · +₱240.00 via GCash",
-    time: "Feb 20, 3:15 PM", date: "Yesterday",
-    unread: false,
-  },
-  {
-    id: "7", type: "order",
-    title: "Order Delivered",
-    subtitle: "Order #11240 · Rosa Lim · Sweet Corn (10pcs)",
-    time: "Feb 20, 1:40 PM", date: "Yesterday",
-    unread: false, orderId: "11240",
-  },
+const MOCK: Notification[] = [
+  { id: "n1", type: "order",  orderId: "ord-001", title: "New Order Received",   body: "Maria Santos placed an order for Organic Tomatoes · 5 kg.", time: "2 min ago"   },
+  { id: "n2", type: "order",  orderId: "ord-002", title: "Order Packed",          body: "Juan Dela Cruz's order for Eggplant · 3 kg is ready.",    time: "18 min ago"  },
+  { id: "n3", type: "stock",                       title: "Low Stock: Bitter Melon", body: "Only 2 kg remaining. Restock soon.",                    time: "1 hr ago"    },
+  { id: "n4", type: "order",  orderId: "ord-003", title: "Order Delivered",       body: "Rosa Lim's order for Sweet Corn · 10 pcs delivered.",     time: "3 hrs ago"   },
+  { id: "n5", type: "system",                      title: "Profile Verified ✅",  body: "Your farm profile is now visible in buyer search.",        time: "Yesterday"   },
+  { id: "n6", type: "stock",                       title: "Low Stock: Kangkong",  body: "Only 1 bundle remaining.",                                time: "Yesterday"   },
+  { id: "n7", type: "promo",                       title: "Harvest Festival Promo", body: "List your products before April 30 to get featured.",   time: "2 days ago"  },
+  { id: "n8", type: "order",  orderId: "ord-004", title: "New Order Received",   body: "Carlo Reyes placed an order for Mango · 10 pcs.",         time: "3 days ago"  },
 ];
 
-// ─── Icon config ──────────────────────────────────────────────────────────────
-
-const ICON: Record<NotifType, { bg: string; color: string; icon: string; lib: "FA5" | "MCI"; dot: string }> = {
-  order:   { bg: "#dcfce7", color: "#15803d", icon: "clipboard-list",       lib: "FA5", dot: "#15803d" },
-  message: { bg: "#dbeafe", color: "#1d4ed8", icon: "message-text-outline", lib: "MCI", dot: "#1d4ed8" },
-  payment: { bg: "#fef3c7", color: "#b45309", icon: "coins",                lib: "FA5", dot: "#b45309" },
-  stock:   { bg: "#ffedd5", color: "#c2410c", icon: "exclamation-triangle", lib: "FA5", dot: "#c2410c" },
+const TYPE_CFG: Record<NotifType, { icon: string; iconColor: string; bg: string }> = {
+  order:  { icon: "clipboard-list-outline", iconColor: "#15803d", bg: "#f0fdf4" },
+  stock:  { icon: "alert-outline",          iconColor: "#d97706", bg: "#fffbeb" },
+  system: { icon: "shield-check-outline",   iconColor: "#2563eb", bg: "#eff6ff" },
+  promo:  { icon: "tag-outline",            iconColor: "#7c3aed", bg: "#f5f3ff" },
 };
 
-// ─── Notif Icon ───────────────────────────────────────────────────────────────
+const TABS: { key: FilterTab; label: string }[] = [
+  { key: "all",    label: "All"     },
+  { key: "order",  label: "Orders"  },
+  { key: "stock",  label: "Stock"   },
+  { key: "system", label: "System"  },
+];
 
-const NotifIcon = ({ type }: { type: NotifType }) => {
-  const cfg = ICON[type];
+const STATUS_BAR = Constants.statusBarHeight ?? 44;
+
+// ─── Detail bottom sheet ──────────────────────────────────────────────────────
+
+const DetailSheet: React.FC<{
+  notif: Notification | null; onClose: () => void;
+}> = ({ notif, onClose }) => {
+  const slideY = useRef(new Animated.Value(500)).current;
+
+  useEffect(() => {
+    if (notif) {
+      Animated.spring(slideY, { toValue: 0, useNativeDriver: true, damping: 20, stiffness: 200 }).start();
+    } else {
+      Animated.timing(slideY, { toValue: 500, duration: 200, useNativeDriver: true }).start();
+    }
+  }, [notif, slideY]);
+
+  if (!notif) return null;
+  const cfg = TYPE_CFG[notif.type];
+
   return (
-    <View
-      style={{ backgroundColor: cfg.bg }}
-      className="w-10 h-10 rounded-xl items-center justify-center flex-shrink-0"
-    >
-      {cfg.lib === "FA5" ? (
-        <FontAwesome5 name={cfg.icon as any} size={15} color={cfg.color} />
-      ) : (
-        <MaterialCommunityIcons name={cfg.icon as any} size={18} color={cfg.color} />
-      )}
-    </View>
+    <Modal visible={!!notif} transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
+      <TouchableOpacity
+        style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.46)", justifyContent: "flex-end" }}
+        activeOpacity={1} onPress={onClose}
+      >
+        <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+          <Animated.View style={{
+            backgroundColor: "#fff",
+            borderTopLeftRadius: 28, borderTopRightRadius: 28,
+            paddingTop: 8, paddingBottom: Platform.OS === "ios" ? 36 : 22,
+            transform: [{ translateY: slideY }],
+          }}>
+            <View style={{ alignItems: "center", marginBottom: 14 }}>
+              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#e5e7eb" }} />
+            </View>
+            <View style={{ paddingHorizontal: 20 }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <View style={{ width: 44, height: 44, borderRadius: 13, backgroundColor: cfg.bg, alignItems: "center", justifyContent: "center" }}>
+                    <MaterialCommunityIcons name={cfg.icon as any} size={21} color={cfg.iconColor} />
+                  </View>
+                  <View>
+                    <Text style={{ fontSize: 10, fontWeight: "700", color: "#9ca3af", letterSpacing: 1.2, textTransform: "uppercase" }}>
+                      {notif.type}
+                    </Text>
+                    <Text style={{ fontSize: 16, fontWeight: "800", color: "#111827", maxWidth: 220 }}>
+                      {notif.title}
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity onPress={onClose} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#f3f4f6", alignItems: "center", justifyContent: "center" }}>
+                  <MaterialCommunityIcons name="close" size={16} color="#6b7280" />
+                </TouchableOpacity>
+              </View>
+              <View style={{ backgroundColor: "#f9fafb", borderRadius: 14, padding: 14, marginBottom: 20 }}>
+                <Text style={{ fontSize: 14, color: "#374151", lineHeight: 22 }}>{notif.body}</Text>
+                <Text style={{ fontSize: 11, color: "#9ca3af", marginTop: 8, fontWeight: "600" }}>{notif.time}</Text>
+              </View>
+              <TouchableOpacity
+                onPress={onClose}
+                style={{ height: 52, borderRadius: 15, backgroundColor: "#166534", alignItems: "center", justifyContent: "center" }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: "800", color: "#fff" }}>Got it</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
   );
 };
+
+// ─── Row ──────────────────────────────────────────────────────────────────────
+
+const NotifRow = React.memo(({ notif, onPress }: { notif: Notification; onPress: (n: Notification) => void }) => {
+  const cfg = TYPE_CFG[notif.type];
+  return (
+    <TouchableOpacity
+      onPress={() => onPress(notif)} activeOpacity={0.7}
+      style={{ flexDirection: "row", alignItems: "flex-start", gap: 12, paddingHorizontal: 16, paddingVertical: 13 }}
+    >
+      <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: cfg.bg, alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
+        <MaterialCommunityIcons name={cfg.icon as any} size={18} color={cfg.iconColor} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 13, fontWeight: "700", color: "#111827", marginBottom: 3 }}>
+          {notif.title}
+        </Text>
+        <Text style={{ fontSize: 12, color: "#6b7280", lineHeight: 18 }} numberOfLines={2}>
+          {notif.body}
+        </Text>
+        <Text style={{ fontSize: 10, color: "#9ca3af", marginTop: 5, fontWeight: "600" }}>
+          {notif.time}
+        </Text>
+      </View>
+      <MaterialCommunityIcons name="chevron-right" size={16} color="#e5e7eb" style={{ marginTop: 2 }} />
+    </TouchableOpacity>
+  );
+});
+
+NotifRow.displayName = "NotifRow";
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 const NotificationsScreen = () => {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<Tab>("all");
-  const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
+  const [activeTab,   setActiveTab]   = useState<FilterTab>("all");
+  const [detailSheet, setDetailSheet] = useState<Notification | null>(null);
 
-  // ── Animated scroll — same pattern as homepage ────────────────────────────
-  const scrollY = useRef(new Animated.Value(0)).current;
+  const filtered = useMemo(
+    () => activeTab === "all"
+      ? MOCK
+      : MOCK.filter(n =>
+          activeTab === "system"
+            ? n.type === "system" || n.type === "promo"
+            : n.type === activeTab
+        ),
+    [activeTab],
+  );
 
-  const headerOpacity = scrollY.interpolate({
-    inputRange: [0, 80],
-    outputRange: [1, 0],
-    extrapolate: "clamp",
-  });
+  const handlePress = useCallback((notif: Notification) => {
+    if (notif.type === "order" && notif.orderId) {
+      router.push(`/farmer/orders/${notif.orderId}` as any);
+    } else {
+      setDetailSheet(notif);
+    }
+  }, [router]);
 
-  const headerTranslate = scrollY.interpolate({
-    inputRange: [0, 80],
-    outputRange: [0, -20],
-    extrapolate: "clamp",
-  });
-
-  const markOneRead = (id: string) =>
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, unread: false } : n))
-    );
-
-  // ── Navigation handlers ───────────────────────────────────────────────────
-
-  const goToOrder = (notif: Notification) => {
-    markOneRead(notif.id);
-    router.push("/farmer/(tabs)/orders" as any);
-  };
-
-  const goToChat = (notif: Notification) => {
-    markOneRead(notif.id);
-    router.push(`/farmer/chats/${notif.buyerId}` as any);
-  };
-
-  const goToEditProduct = (notif: Notification) => {
-    markOneRead(notif.id);
-    router.push(`/farmer/(tabs)/products/edit/${notif.productId}` as any);
-  };
-
-  // ── Filter logic ──────────────────────────────────────────────────────────
-
-  const filtered = notifications.filter((n) => {
-    if (activeTab === "orders")   return n.type === "order";
-    if (activeTab === "payments") return n.type === "payment";
-    if (activeTab === "messages") return n.type === "message";
-    return true;
-  });
-
-  const todayItems     = filtered.filter((n) => n.date === "Today");
-  const yesterdayItems = filtered.filter((n) => n.date === "Yesterday");
-
-  const tabs: { key: Tab; label: string }[] = [
-    { key: "all",      label: "All"      },
-    { key: "orders",   label: "Orders"   },
-    { key: "payments", label: "Payments" },
-    { key: "messages", label: "Messages" },
-  ];
-
-  // ── Card renderer ─────────────────────────────────────────────────────────
-
-  const renderCard = (notif: Notification) => {
-    const dot = ICON[notif.type].dot;
-
-    return (
-      <View
-        key={notif.id}
-        className={`rounded-2xl overflow-hidden mb-2 border ${
-          notif.unread
-            ? "border-green-200 bg-green-50"
-            : "border-gray-100 bg-white"
-        }`}
-      >
-        {/* Tappable main row */}
-        <TouchableOpacity
-          className="flex-row items-start gap-3 px-3 pt-3 pb-2"
-          onPress={() => {
-            if (notif.type === "order")   goToOrder(notif);
-            if (notif.type === "message") goToChat(notif);
-            if (notif.type === "payment") markOneRead(notif.id);
-            if (notif.type === "stock")   goToEditProduct(notif);
-          }}
-        >
-          <NotifIcon type={notif.type} />
-
-          <View className="flex-1">
-            <Text
-              className={`text-[13px] leading-snug ${
-                notif.unread
-                  ? "font-bold text-gray-900"
-                  : "font-medium text-gray-500"
-              }`}
-            >
-              {notif.title}
-            </Text>
-            <Text className="text-[12px] text-gray-500 mt-0.5 leading-snug">
-              {notif.subtitle}
-            </Text>
-            <Text className="text-[11px] text-gray-400 mt-1">{notif.time}</Text>
-          </View>
-
-          {notif.unread && (
-            <View
-              style={{ backgroundColor: dot }}
-              className="w-2 h-2 rounded-full mt-1 flex-shrink-0"
-            />
-          )}
-        </TouchableOpacity>
-
-        {/* Action buttons — unread + actionable only */}
-        {notif.actionable && notif.unread && (
-          <>
-            {notif.type === "order" && (
-              <View className="flex-row gap-2 px-3 pb-3 pt-1">
-                <TouchableOpacity
-                  className="flex-1 bg-white border border-gray-200 rounded-full py-2 items-center"
-                  onPress={() => markOneRead(notif.id)}
-                >
-                  <Text className="text-[12px] font-bold text-gray-400">Decline</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  className="flex-1 bg-green-800 rounded-full py-2 items-center"
-                  onPress={() => goToOrder(notif)}
-                >
-                  <Text className="text-[12px] font-bold text-white">Accept</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {notif.type === "message" && (
-              <View className="px-3 pb-3 pt-1">
-                <TouchableOpacity
-                  className="bg-blue-50 border border-blue-200 rounded-full py-2 items-center"
-                  onPress={() => goToChat(notif)}
-                >
-                  <Text className="text-[12px] font-bold text-blue-700">Reply</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {notif.type === "stock" && (
-              <View className="px-3 pb-3 pt-1">
-                <TouchableOpacity
-                  className="bg-orange-50 border border-orange-200 rounded-full py-2 items-center"
-                  onPress={() => goToEditProduct(notif)}
-                >
-                  <Text className="text-[12px] font-bold text-orange-700">
-                    Update Stock
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </>
+  const renderItem = useCallback(
+    ({ item, index }: { item: Notification; index: number }) => (
+      <View>
+        <NotifRow notif={item} onPress={handlePress} />
+        {index < filtered.length - 1 && (
+          <View style={{ height: 1, backgroundColor: "#f3f4f6", marginHorizontal: 16 }} />
         )}
       </View>
-    );
-  };
-
-  // ── UI ────────────────────────────────────────────────────────────────────
+    ),
+    [handlePress, filtered.length],
+  );
 
   return (
-    <View className="flex-1 bg-green-800">
+    <View style={{ flex: 1, backgroundColor: "#166534" }}>
 
-      <Animated.ScrollView
-        showsVerticalScrollIndicator={false}
-        scrollEventThrottle={16}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true }
-        )}
-      >
-        {/* ── GREEN HEADER — fades + slides as you scroll ──────────────────── */}
-        <View className="bg-green-800 px-5 pt-16 pb-8">
-
-          <Animated.View
-            style={{ opacity: headerOpacity, transform: [{ translateY: headerTranslate }] }}
+      {/* Green header */}
+      <View style={{ paddingTop: STATUS_BAR + 10, paddingHorizontal: 18, paddingBottom: 22, backgroundColor: "#166634" }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.12)", borderWidth: 1, borderColor: "rgba(255,255,255,0.14)", alignItems: "center", justifyContent: "center" }}
           >
-            {/* Back + title */}
-            <View className="flex-row items-center justify-between mb-5">
-              <TouchableOpacity
-                className="flex-row items-center gap-2"
-                onPress={() => router.back()}
-              >
-                <FontAwesome5 name="chevron-left" size={16} color="white" />
-                <Text className="text-white text-[15px] font-semibold">Back</Text>
-              </TouchableOpacity>
-
-              <Text className="text-white font-bold text-[20px]">Notifications</Text>
-
-              <View style={{ width: 60 }} />
-            </View>
-          </Animated.View>
+            <MaterialCommunityIcons name="arrow-left" size={18} color="#fff" />
+          </TouchableOpacity>
+          <View>
+            <Text style={{ color: "rgba(255,255,255,0.6)", fontSize: 11, fontWeight: "600" }}>Farmer Hub</Text>
+            <Text style={{ color: "#fff", fontSize: 19, fontWeight: "800" }}>Notifications</Text>
+          </View>
         </View>
+      </View>
 
-        {/* ── WHITE ROUNDED BODY rises over green when scrolling ──────────── */}
-        <View
-          className="bg-gray-100 rounded-t-[35px] px-5 pt-5"
-          style={{ minHeight: SCREEN_HEIGHT, marginTop: -20 }}
+      {/* White body */}
+      <View style={{ flex: 1, backgroundColor: "#f3f4f6", borderTopLeftRadius: 30, borderTopRightRadius: 30, marginTop: -16 }}>
+
+        {/* ── Filter tabs ──
+            Each tab has a FIXED width (minWidth + explicit paddingHorizontal)
+            so pressing one never causes layout shift in neighbouring tabs.
+        */}
+        <ScrollView
+          horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 14, paddingTop: 14, paddingBottom: 8, gap: 8 }}
         >
-          {/* ── FILTER TABS ─────────────────────────────────────────────────── */}
-          <View className="flex-row gap-2 mb-4">
-            {tabs.map((tab) => (
+          {TABS.map(tab => {
+            const active = activeTab === tab.key;
+            return (
               <TouchableOpacity
                 key={tab.key}
                 onPress={() => setActiveTab(tab.key)}
-                style={{ flex: 1 }}
-                className={`rounded-full py-2 items-center border ${
-                  activeTab === tab.key
-                    ? "bg-green-800 border-green-800"
-                    : "bg-white border-gray-200"
-                }`}
+                // Fixed dimensions prevent the tab from "jumping" when pressed
+                style={{
+                  width: 76,              // explicit fixed width
+                  height: 32,             // explicit fixed height
+                  borderRadius: 16,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: active ? "#166534" : "#fff",
+                  borderWidth: 1,
+                  borderColor: active ? "#166534" : "#e5e7eb",
+                }}
+                activeOpacity={0.8}
               >
-                <Text
-                  className={`text-[11px] font-bold ${
-                    activeTab === tab.key ? "text-white" : "text-gray-500"
-                  }`}
-                >
+                <Text style={{
+                  fontSize: 11,           // reduced from previous over-large size
+                  fontWeight: "700",
+                  color: active ? "#fff" : "#6b7280",
+                }}>
                   {tab.label}
                 </Text>
               </TouchableOpacity>
-            ))}
+            );
+          })}
+        </ScrollView>
+
+        {/* List */}
+        {filtered.length === 0 ? (
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingBottom: 80 }}>
+            <Text style={{ fontSize: 36, marginBottom: 10 }}>🔔</Text>
+            <Text style={{ fontSize: 14, fontWeight: "700", color: "#374151" }}>No notifications</Text>
+            <Text style={{ fontSize: 12, color: "#9ca3af", marginTop: 4 }}>You&apos;re all caught up!</Text>
           </View>
+        ) : (
+          <FlatList
+            data={filtered}
+            keyExtractor={item => item.id}
+            renderItem={renderItem}
+            contentContainerStyle={{
+              backgroundColor: "#fff", borderRadius: 18,
+              marginHorizontal: 14, marginBottom: 24, overflow: "hidden",
+            }}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
+      </View>
 
-          {/* ── NOTIFICATION LIST ────────────────────────────────────────────── */}
-          {filtered.length === 0 ? (
-            <View className="items-center py-16">
-              <View className="w-16 h-16 rounded-full bg-green-100 items-center justify-center mb-4">
-                <FontAwesome5 name="bell-slash" size={24} color="#15803d" />
-              </View>
-              <Text className="text-[16px] font-bold text-gray-600 mb-1">
-                All caught up!
-              </Text>
-              <Text className="text-[13px] text-gray-400 text-center">
-                No notifications in this category.
-              </Text>
-            </View>
-          ) : (
-            <>
-              {todayItems.length > 0 && (
-                <>
-                  <Text className="text-[11px] font-bold text-gray-400 tracking-widest uppercase mb-2 ml-1">
-                    Today
-                  </Text>
-                  {todayItems.map(renderCard)}
-                </>
-              )}
-              {yesterdayItems.length > 0 && (
-                <>
-                  <Text className="text-[11px] font-bold text-gray-400 tracking-widest uppercase mb-2 ml-1 mt-3">
-                    Yesterday
-                  </Text>
-                  {yesterdayItems.map(renderCard)}
-                </>
-              )}
-            </>
-          )}
-
-          <View className="h-28" />
-        </View>
-      </Animated.ScrollView>
+      <DetailSheet notif={detailSheet} onClose={() => setDetailSheet(null)} />
     </View>
   );
 };
