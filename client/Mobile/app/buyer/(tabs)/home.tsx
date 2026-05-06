@@ -11,10 +11,9 @@ import {
 
 import Categories from "@/components/Categories";
 import { images } from "@/constants/image";
+import { API_CONFIG } from "@/constants/api";
 import { Ionicons } from "@expo/vector-icons";
 import { Product } from "@/interfaces/product"; // import interface
-
-const API_URL = "http://192.168.8.9:5000";
 
 export default function Home() {
   const router = useRouter();
@@ -28,7 +27,7 @@ export default function Home() {
 
   const fetchProducts = async () => {
     try {
-      const res = await fetch(`${API_URL}/products`);
+      const res = await fetch(API_CONFIG.PRODUCTS.LIST);
       const data = await res.json();
       setProducts(data);
       setLoading(false);

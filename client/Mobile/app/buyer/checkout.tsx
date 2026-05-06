@@ -11,8 +11,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
-const API_URL = "http://192.168.8.9:5000";
+import { API_CONFIG } from "@/constants/api";
 
 export default function Checkout() {
   const { buyerId, items } = useLocalSearchParams();
@@ -70,7 +69,7 @@ export default function Checkout() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_URL}/orders/${buyerId}`, {
+      const res = await fetch(API_CONFIG.ORDERS.BY_USER(buyerId), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

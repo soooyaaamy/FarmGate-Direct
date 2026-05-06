@@ -3,11 +3,12 @@ import Constants from "expo-constants";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-  Image, ScrollView, Text,
-  TouchableOpacity, View,
+  Image,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
-
-// ── All constants OUTSIDE the component ──────────────────────────────────────
 
 const STATUS_BAR = Constants.statusBarHeight ?? 44;
 
@@ -16,75 +17,64 @@ const FARM = {
   location: "Hagonoy, Bulacan",
   rating: 5.0,
   reviewCount: 125,
-  about: "Green Valley Farm has been family-owned for three generations, specializing in organic and sustainable farming. We grow a diverse range of seasonal vegetables, fruits, and herbs across our 45-acre property.",
-  farmer: { name: "Mario Santos", initials: "MS" },
+  about:
+    "Green Valley Farm has been family-owned for three generations, specializing in organic and sustainable farming. We grow a diverse range of seasonal vegetables, fruits, and herbs across our 45-acre property.",
+  farmer: { name: "Mario Santos" },
   coverPhoto: require("../../../assets/images/farm-picture.jpg") as any,
 };
 
 const PRODUCTS = [
-  { id: "1", name: "Tomatoes", price: 120, unit: "kg", available: 45, rating: 5.0, badge: "Fresh", image: require("../../../assets/images/tomato.jpg") },
-  { id: "2", name: "Eggplant", price: 80,  unit: "kg", available: 30, rating: 5.0, badge: "Fresh", image: require("../../../assets/images/eggplant.jpg") },
-  { id: "3", name: "Mango",    price: 60,  unit: "pc", available: 50, rating: 4.8, badge: "Fresh", image: require("../../../assets/images/mango.jpg") },
-  { id: "4", name: "Banana",   price: 35,  unit: "pc", available: 80, rating: 4.9, badge: "Fresh", image: require("../../../assets/images/banana.jpg") },
+  { id: "1", name: "Tomatoes", price: 120, unit: "kg", available: 45, rating: 5.0, image: require("../../../assets/images/tomato.jpg") },
+  { id: "2", name: "Eggplant", price: 80,  unit: "kg", available: 30, rating: 5.0, image: require("../../../assets/images/eggplant.jpg") },
+  { id: "3", name: "Mango",    price: 60,  unit: "pc", available: 50, rating: 4.8, image: require("../../../assets/images/mango.jpg") },
+  { id: "4", name: "Banana",   price: 35,  unit: "pc", available: 80, rating: 4.9, image: require("../../../assets/images/banana.jpg") },
 ];
 
-const BADGE_COLORS: Record<string, { bg: string; text: string }> = {
-  Fresh: { bg: "#166534", text: "#fff" },
-};
-
-// ── Product Card OUTSIDE the component ───────────────────────────────────────
-const ProductCard = ({ item }: { item: typeof PRODUCTS[0] }) => {
-  const badge = BADGE_COLORS[item.badge] ?? BADGE_COLORS.Fresh;
-  return (
-    <View style={{
-      backgroundColor: "white", borderRadius: 16,
-      overflow: "hidden", flex: 1, margin: 5,
-      shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.08, shadowRadius: 8, elevation: 3,
-    }}>
-      <View style={{ height: 140, position: "relative" }}>
-        <Image source={item.image} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
-        <View style={{
-          position: "absolute", top: 7, left: 7,
-          backgroundColor: badge.bg, borderRadius: 6,
-          paddingHorizontal: 7, paddingVertical: 2,
-        }}>
-          <Text style={{ fontSize: 10, color: badge.text, fontWeight: "700" }}>
-            {item.badge}
-          </Text>
-        </View>
-      </View>
-      <View style={{ padding: 10 }}>
-        <Text style={{ fontSize: 13, fontWeight: "700", color: "#111827" }} numberOfLines={1}>
-          {item.name}
-        </Text>
-        <Text style={{ fontSize: 11, color: "#9ca3af", marginTop: 2, marginBottom: 6 }} numberOfLines={1}>
-          {FARM.name} · {FARM.location}
-        </Text>
-        <Text style={{ fontSize: 14, fontWeight: "700", color: "#15803d", marginBottom: 4 }}>
-          ₱{item.price} / {item.unit}
-        </Text>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 10 }}>
-          <Text style={{ fontSize: 11, color: "#6b7280" }}>
-            {item.available} {item.unit} Available
-          </Text>
-          <Text style={{ fontSize: 10, color: "#d1d5db" }}>•</Text>
-          <Ionicons name="star" size={11} color="#f59e0b" />
-          <Text style={{ fontSize: 11, fontWeight: "600", color: "#374151" }}>{item.rating}</Text>
-        </View>
+const ProductCard = ({ item }: { item: typeof PRODUCTS[0] }) => (
+  <View style={{
+    backgroundColor: "white", borderRadius: 16,
+    overflow: "hidden", flex: 1, margin: 5,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08, shadowRadius: 8, elevation: 3,
+  }}>
+    <View style={{ height: 140 }}>
+      <Image source={item.image} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+      <View style={{
+        position: "absolute", top: 7, left: 7,
+        backgroundColor: "#166534", borderRadius: 6,
+        paddingHorizontal: 7, paddingVertical: 2,
+      }}>
+        <Text style={{ fontSize: 10, color: "#fff", fontWeight: "700" }}>Fresh</Text>
       </View>
     </View>
-  );
-};
+    <View style={{ padding: 10 }}>
+      <Text style={{ fontSize: 13, fontWeight: "700", color: "#111827" }} numberOfLines={1}>
+        {item.name}
+      </Text>
+      <Text style={{ fontSize: 11, color: "#9ca3af", marginTop: 2, marginBottom: 6 }} numberOfLines={1}>
+        {FARM.name} · {FARM.location}
+      </Text>
+      <Text style={{ fontSize: 14, fontWeight: "700", color: "#15803d", marginBottom: 4 }}>
+        ₱{item.price} / {item.unit}
+      </Text>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+        <Text style={{ fontSize: 11, color: "#6b7280" }}>
+          {item.available} {item.unit} available
+        </Text>
+        <Text style={{ fontSize: 10, color: "#d1d5db" }}>•</Text>
+        <Ionicons name="star" size={11} color="#f59e0b" />
+        <Text style={{ fontSize: 11, fontWeight: "600", color: "#374151" }}>{item.rating}</Text>
+      </View>
+    </View>
+  </View>
+);
 
-// ── Main Screen ───────────────────────────────────────────────────────────────
-const FarmProfile = () => {
+export default function BuyerFarmerProfile() {
   const router = useRouter();
   const { farmerId } = useLocalSearchParams<{ farmerId: string }>();
   const [isFavorited, setIsFavorited] = useState(false);
 
-  // farmerId available here — use to fetch real data from Firebase later
-  console.log("farmerId:", farmerId);
+  console.log("Viewing farmer profile for ID:", farmerId);
 
   return (
     <View style={{ flex: 1, backgroundColor: "#f3f4f6" }}>
@@ -97,7 +87,6 @@ const FarmProfile = () => {
             position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
             backgroundColor: "rgba(0,0,0,0.15)",
           }} />
-          {/* Back button */}
           <TouchableOpacity
             onPress={() => router.back()}
             style={{
@@ -109,25 +98,13 @@ const FarmProfile = () => {
           >
             <Ionicons name="arrow-back" size={20} color="#111827" />
           </TouchableOpacity>
-          {/* Edit Profile button */}
-          <TouchableOpacity
-            onPress={() => router.push("/farmer/profile/edit-profile" as any)}
-            style={{
-              position: "absolute", top: STATUS_BAR + 8, right: 16,
-              flexDirection: "row", alignItems: "center", gap: 5,
-              backgroundColor: "rgba(255,255,255,0.88)",
-              borderRadius: 20, paddingHorizontal: 12, paddingVertical: 8,
-            }}
-          >
-            <Ionicons name="pencil" size={13} color="#111827" />
-            <Text style={{ fontSize: 12, fontWeight: "700", color: "#111827" }}>Edit Profile</Text>
-          </TouchableOpacity>
         </View>
 
         {/* White Body */}
         <View style={{
-          backgroundColor: "white", borderTopLeftRadius: 24,
-          borderTopRightRadius: 24, marginTop: -20, padding: 18,
+          backgroundColor: "white",
+          borderTopLeftRadius: 24, borderTopRightRadius: 24,
+          marginTop: -20, padding: 18,
         }}>
           {/* Farm name + actions */}
           <View style={{
@@ -178,13 +155,9 @@ const FarmProfile = () => {
 
           <View style={{ height: 1, backgroundColor: "#f3f4f6", marginBottom: 14 }} />
 
-          {/* About Farm */}
-          <Text style={{ fontSize: 14, fontWeight: "700", color: "#111827", marginBottom: 6 }}>
-            About Farm
-          </Text>
-          <Text style={{ fontSize: 13, color: "#6b7280", lineHeight: 20, marginBottom: 14 }}>
-            {FARM.about}
-          </Text>
+          {/* About */}
+          <Text style={{ fontSize: 14, fontWeight: "700", color: "#111827", marginBottom: 6 }}>About Farm</Text>
+          <Text style={{ fontSize: 13, color: "#6b7280", lineHeight: 20, marginBottom: 14 }}>{FARM.about}</Text>
 
           {/* Farmer card */}
           <View style={{
@@ -194,7 +167,7 @@ const FarmProfile = () => {
           }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
               <Image
-                source={require("../../../assets/images/farmer-profile.jpg")}
+                source={require("../../../assets/images/farmer-profile.jpg")} // ✅ fixed
                 style={{ width: 40, height: 40, borderRadius: 20 }}
                 resizeMode="cover"
               />
@@ -217,22 +190,17 @@ const FarmProfile = () => {
             alignItems: "center", marginBottom: 10,
           }}>
             <Text style={{ fontSize: 14, fontWeight: "700", color: "#111827" }}>Our Products</Text>
-            <TouchableOpacity onPress={() => router.push("/farmer/(tabs)/product" as any)}>
-              <Text style={{ fontSize: 12, color: "#15803d", fontWeight: "700" }}>See all →</Text>
-            </TouchableOpacity>
           </View>
           <View style={{ flexDirection: "row", flexWrap: "wrap", margin: -5 }}>
-            {PRODUCTS.slice(0, 4).map((item) => (
+            {PRODUCTS.map((item) => (
               <View key={item.id} style={{ width: "50%" }}>
                 <ProductCard item={item} />
               </View>
             ))}
           </View>
-
         </View>
+
       </ScrollView>
     </View>
   );
-};
-
-export default FarmProfile;
+}

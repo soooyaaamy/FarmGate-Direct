@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { FiCheck, FiSearch, FiX } from "react-icons/fi";
 import "../index.css";
 
-const API = "http://192.168.8.14:5000"; // <-- make sure same IP as mobile
+const API = "http://192.168.8.7:5000"; // <-- make sure same IP as mobile
 
 const RequestApproval = () => {
   const [users, setUsers] = useState([]);

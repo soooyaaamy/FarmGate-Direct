@@ -12,14 +12,13 @@ import {
   Animated,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { API_CONFIG } from "@/constants/api";
 import {
   AntDesign,
   FontAwesome5,
   Ionicons,
   MaterialIcons,
 } from "@expo/vector-icons";
-
-const API_URL = "http://192.168.8.9:5000";
 
 export default function ProductDetails() {
   const router = useRouter();
@@ -62,7 +61,7 @@ export default function ProductDetails() {
 
   const fetchProduct = async () => {
     try {
-      const res = await fetch(`${API_URL}/products`);
+      const res = await fetch(API_CONFIG.PRODUCTS.LIST);
       const data = await res.json();
       const prod = data.find((p: any) => String(p.id) === String(id));
       setProduct(prod);
@@ -100,7 +99,7 @@ export default function ProductDetails() {
         return;
       }
       try {
-        await fetch(`${API_URL}/cart`, {
+        await fetch(API_CONFIG.CART.BASE, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

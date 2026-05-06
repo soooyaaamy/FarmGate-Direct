@@ -10,8 +10,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
-const API_URL = "http://192.168.8.9:5000";
+import { API_CONFIG } from "../constants/api";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -27,7 +26,7 @@ const Login = () => {
     try {
       setLoading(true);
 
-      const res = await fetch(`${API_URL}/auth/login`, {
+      const res = await fetch(API_CONFIG.AUTH.LOGIN, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),

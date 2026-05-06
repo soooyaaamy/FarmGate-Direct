@@ -11,6 +11,7 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import AntDesign from "@expo/vector-icons/AntDesign";
+import { API_CONFIG } from "../constants/api";
 
 const RegisterFarmer = () => {
   const router = useRouter();
@@ -82,7 +83,7 @@ const RegisterFarmer = () => {
     }
 
     try {
-      const res = await fetch("http://192.168.8.8:5000/register", {
+      const res = await fetch(API_CONFIG.AUTH.REGISTER, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -15,8 +15,6 @@ export default function RootLayout() {
           <Stack.Screen name="farmer/(tabs)" />
           <Stack.Screen name="products/[id]" />
           <Stack.Screen name="checkout" />
-          <Stack.Screen name="farmer/products/add-product" />
-          <Stack.Screen name="farmer/products/edit-product" />
           <Stack.Screen name="farmer/products/delete-product" />
         </Stack>
       </CartProvider>

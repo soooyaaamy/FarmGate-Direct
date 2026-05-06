@@ -12,7 +12,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 
-const API_URL = "http://192.168.8.9:5000";
+const API_URL = "http://192.168.8.7:5000";
 
 export default function Cart() {
   const router = useRouter();

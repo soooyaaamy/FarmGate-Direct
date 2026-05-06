@@ -7,6 +7,7 @@ const orderRoutes = require("./routes/orders");
 const cartRoutes = require("./routes/cart");
 const messageRoutes = require("./routes/messages");
 const adminRoutes = require("./routes/admin");
+const userRoutes = require("./routes/users");
 
 const app = express();
 app.use(cors());
@@ -19,6 +20,7 @@ app.use("/orders", orderRoutes);
 app.use("/cart", cartRoutes);
 app.use("/messages", messageRoutes);
 app.use("/admin", adminRoutes);
+app.use("/users", userRoutes);
 
 app.listen(5000, "0.0.0.0", () => {
   console.log("Server running on port 5000");
