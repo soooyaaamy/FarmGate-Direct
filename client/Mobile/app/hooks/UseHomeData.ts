@@ -41,24 +41,24 @@ const MOCK_SALES: SalesData = {
 
 const COLORS = ["#166534","#1e40af","#92400e","#6b21a8","#be185d"];
 const MOCK_ORDERS: OrderDetail[] = [
-  { id: "ord-001", customerName: "Maria Santos", initials: "MS", item: "Organic Tomatoes · 5 kg", price: "₱350", status: "New", avatarColor: COLORS[0], address: "123 Mabini St, Hagonoy, Bulacan", phone: "09171234567", orderDate: "Apr 29, 2026 · 9:14 AM", items: [{ name: "Organic Tomatoes", qty: 5, price: 70 }], timeline: [{ status: "New", time: "9:14 AM", done: true }, { status: "Packing", time: "—", done: false }, { status: "Ready", time: "—", done: false }, { status: "Delivered", time: "—", done: false }] },
-  { id: "ord-002", customerName: "Juan Dela Cruz", initials: "JD", item: "Eggplant · 3 kg", price: "₱180", status: "Packing", avatarColor: COLORS[1], address: "45 Rizal Ave, Calumpit, Bulacan", phone: "09281112233", orderDate: "Apr 29, 2026 · 8:50 AM", items: [{ name: "Eggplant", qty: 3, price: 60 }], timeline: [{ status: "New", time: "8:50 AM", done: true }, { status: "Packing", time: "9:05 AM", done: true }, { status: "Ready", time: "—", done: false }, { status: "Delivered", time: "—", done: false }] },
-  { id: "ord-003", customerName: "Rosa Lim", initials: "RL", item: "Sweet Corn · 10 pcs", price: "₱120", status: "Delivered", avatarColor: COLORS[2], address: "88 Quezon Blvd, Malolos", phone: "09155678900", orderDate: "Apr 28, 2026 · 7:20 AM", items: [{ name: "Sweet Corn", qty: 10, price: 12 }], timeline: [{ status: "New", time: "7:20 AM", done: true }, { status: "Packing", time: "7:35 AM", done: true }, { status: "Ready", time: "7:55 AM", done: true }, { status: "Delivered", time: "9:10 AM", done: true }] },
-  { id: "ord-004", customerName: "Carlo Reyes", initials: "CR", item: "Mango · 10 pcs", price: "₱200", status: "New", avatarColor: COLORS[3], address: "12 Del Pilar St, Bocaue", phone: "09209876543", orderDate: "Apr 29, 2026 · 10:02 AM", items: [{ name: "Carabao Mango", qty: 10, price: 20 }], timeline: [{ status: "New", time: "10:02 AM", done: true }, { status: "Packing", time: "—", done: false }, { status: "Ready", time: "—", done: false }, { status: "Delivered", time: "—", done: false }] },
-  { id: "ord-005", customerName: "Ana Villanueva", initials: "AV", item: "Bitter Melon · 2 kg", price: "₱90", status: "Ready", avatarColor: COLORS[4], address: "66 Gomez St, Plaridel", phone: "09334455667", orderDate: "Apr 29, 2026 · 6:45 AM", items: [{ name: "Bitter Melon", qty: 2, price: 45 }], timeline: [{ status: "New", time: "6:45 AM", done: true }, { status: "Packing", time: "7:00 AM", done: true }, { status: "Ready", time: "7:20 AM", done: true }, { status: "Delivered", time: "—", done: false }] },
+  { id: "ord-001", customerName: "Maria Santos",    initials: "MS", item: "Organic Tomatoes · 5 kg", price: "₱350", status: "New",       avatarColor: COLORS[0], address: "123 Mabini St, Hagonoy, Bulacan",  phone: "09171234567", orderDate: "Apr 29, 2026 · 9:14 AM",  items: [{ name: "Organic Tomatoes", qty: 5, price: 70 }], timeline: [{ status: "New", time: "9:14 AM", done: true }, { status: "Packing", time: "—", done: false }, { status: "Ready", time: "—", done: false }, { status: "Delivered", time: "—", done: false }] },
+  { id: "ord-002", customerName: "Juan Dela Cruz",  initials: "JD", item: "Eggplant · 3 kg",         price: "₱180", status: "Packing",   avatarColor: COLORS[1], address: "45 Rizal Ave, Calumpit, Bulacan",  phone: "09281112233", orderDate: "Apr 29, 2026 · 8:50 AM",  items: [{ name: "Eggplant", qty: 3, price: 60 }],          timeline: [{ status: "New", time: "8:50 AM", done: true }, { status: "Packing", time: "9:05 AM", done: true }, { status: "Ready", time: "—", done: false }, { status: "Delivered", time: "—", done: false }] },
+  { id: "ord-003", customerName: "Rosa Lim",        initials: "RL", item: "Sweet Corn · 10 pcs",     price: "₱120", status: "Delivered", avatarColor: COLORS[2], address: "88 Quezon Blvd, Malolos",          phone: "09155678900", orderDate: "Apr 28, 2026 · 7:20 AM",  items: [{ name: "Sweet Corn", qty: 10, price: 12 }],       timeline: [{ status: "New", time: "7:20 AM", done: true }, { status: "Packing", time: "7:35 AM", done: true }, { status: "Ready", time: "7:55 AM", done: true }, { status: "Delivered", time: "9:10 AM", done: true }] },
+  { id: "ord-004", customerName: "Carlo Reyes",     initials: "CR", item: "Mango · 10 pcs",          price: "₱200", status: "New",       avatarColor: COLORS[3], address: "12 Del Pilar St, Bocaue",          phone: "09209876543", orderDate: "Apr 29, 2026 · 10:02 AM", items: [{ name: "Carabao Mango", qty: 10, price: 20 }],    timeline: [{ status: "New", time: "10:02 AM", done: true }, { status: "Packing", time: "—", done: false }, { status: "Ready", time: "—", done: false }, { status: "Delivered", time: "—", done: false }] },
+  { id: "ord-005", customerName: "Ana Villanueva",  initials: "AV", item: "Bitter Melon · 2 kg",     price: "₱90",  status: "Ready",     avatarColor: COLORS[4], address: "66 Gomez St, Plaridel",            phone: "09334455667", orderDate: "Apr 29, 2026 · 6:45 AM",  items: [{ name: "Bitter Melon", qty: 2, price: 45 }],      timeline: [{ status: "New", time: "6:45 AM", done: true }, { status: "Packing", time: "7:00 AM", done: true }, { status: "Ready", time: "7:20 AM", done: true }, { status: "Delivered", time: "—", done: false }] },
 ];
 
 const MOCK_TOP: TopProduct[] = [
   { rank: 1, id: "p1", name: "Organic Tomatoes", sold: 47, revenue: 7050, pct: 90, image: null, emoji: "🍅" },
   { rank: 2, id: "p2", name: "Sweet Corn",        sold: 38, revenue: 4560, pct: 65, image: null, emoji: "🌽" },
-  { rank: 3, id: "p3", name: "Eggplant",           sold: 22, revenue: 2640, pct: 38, image: null, emoji: "🍆" },
-  { rank: 4, id: "p4", name: "Kangkong",            sold: 19, revenue: 1140, pct: 30, image: null, emoji: "🥬" },
-  { rank: 5, id: "p5", name: "Watermelon",          sold: 17, revenue: 3400, pct: 27, image: null, emoji: "🍉" },
+  { rank: 3, id: "p3", name: "Eggplant",          sold: 22, revenue: 2640, pct: 38, image: null, emoji: "🍆" },
+  { rank: 4, id: "p4", name: "Kangkong",          sold: 19, revenue: 1140, pct: 30, image: null, emoji: "🥬" },
+  { rank: 5, id: "p5", name: "Watermelon",        sold: 17, revenue: 3400, pct: 27, image: null, emoji: "🍉" },
 ];
 const MOCK_LOW: StockProduct[] = [
-  { id: "p6", name: "Bitter Melon", stock: 2, unit: "kg", image: null, emoji: "🥒" },
-  { id: "p4", name: "Kangkong", stock: 1, unit: "bundle", image: null, emoji: "🥬" },
-  { id: "p7", name: "Okra", stock: 4, unit: "kg", image: null, emoji: "🌿" },
+  { id: "p6", name: "Bitter Melon", stock: 2,  unit: "kg",     image: null, emoji: "🥒" },
+  { id: "p4", name: "Kangkong",     stock: 1,  unit: "bundle", image: null, emoji: "🥬" },
+  { id: "p7", name: "Okra",        stock: 4,  unit: "kg",     image: null, emoji: "🌿" },
 ];
 
 async function safeFetch(url: string, opts?: RequestInit): Promise<Response> {
@@ -78,22 +78,30 @@ export function useHomeData(): HomeData {
   const [details] = useState<OrderDetail[]>(MOCK_ORDERS);
 
   const badges: BadgeCounts = {
-    messages: 3,
-    orders: orders.filter(o => o.status === "New").length,
+    messages:   3,
+    orders:     orders.filter(o => o.status === "New").length,
     deliveries: orders.filter(o => o.status === "Ready").length,
   };
 
   const loadMock = useCallback(() => {
-    setSales(MOCK_SALES); setTop(MOCK_TOP);
+    setSales(MOCK_SALES);
+    setTop(MOCK_TOP);
     setOrders(MOCK_ORDERS.map(({ id, customerName, initials, item, price, status, avatarColor }) => ({ id, customerName, initials, item, price, status, avatarColor })));
-    setLow(MOCK_LOW); setTotal(121); setError(null);
+    setLow(MOCK_LOW);
+    setTotal(121);
+    setError(null);
   }, []);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
     if (!API_BASE) { loadMock(); setLoading(false); return; }
     try {
-      const [sR, tR, oR, lR] = await Promise.all([safeFetch(`${API_BASE}/dashboard/sales`), safeFetch(`${API_BASE}/products/top-selling?limit=5`), safeFetch(`${API_BASE}/orders/recent?limit=5`), safeFetch(`${API_BASE}/products/low-stock?threshold=${LOW_STOCK_THRESHOLD}`)]);
+      const [sR, tR, oR, lR] = await Promise.all([
+        safeFetch(`${API_BASE}/dashboard/sales`),
+        safeFetch(`${API_BASE}/products/top-selling?limit=5`),
+        safeFetch(`${API_BASE}/orders/recent?limit=5`),
+        safeFetch(`${API_BASE}/products/low-stock?threshold=${LOW_STOCK_THRESHOLD}`),
+      ]);
       if (!sR.ok || !tR.ok || !oR.ok || !lR.ok) throw new Error("API error");
       const [s, t, o, l] = await Promise.all([sR.json(), tR.json(), oR.json(), lR.json()]);
       setSales(s); setTop(t.products ?? []); setOrders(o.orders ?? []); setLow(l.products ?? []); setTotal(o.total ?? 0);
@@ -107,11 +115,28 @@ export function useHomeData(): HomeData {
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const updateProductStock = useCallback(async (id: string, newStock: number) => {
-    setLow(prev => newStock > LOW_STOCK_THRESHOLD ? prev.filter(p => p.id !== id) : prev.map(p => p.id === id ? { ...p, stock: newStock } : p));
+    setLow(prev => newStock > LOW_STOCK_THRESHOLD
+      ? prev.filter(p => p.id !== id)
+      : prev.map(p => p.id === id ? { ...p, stock: newStock } : p));
     if (!API_BASE) return;
-    try { await safeFetch(`${API_BASE}/products/${id}/stock`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stock: newStock }) }); }
-    catch { fetchAll(); }
+    try {
+      await safeFetch(`${API_BASE}/products/${id}/stock`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stock: newStock }),
+      });
+    } catch { fetchAll(); }
   }, [fetchAll]);
 
-  return { sales, topProducts: top, recentOrders: orders, lowStockProducts: low, totalOrders: total, badgeCounts: badges, loading, error, refresh: fetchAll, updateProductStock, getOrderById: (id) => details.find(o => o.id === id) };
+  return {
+    sales, topProducts: top, recentOrders: orders, lowStockProducts: low,
+    totalOrders: total, badgeCounts: badges, loading, error,
+    refresh: fetchAll, updateProductStock,
+    getOrderById: (id) => details.find(o => o.id === id),
+  };
 }
+
+// ─── Required by Expo Router ──────────────────────────────────────────────────
+// This file lives inside app/ so Expo Router tries to register it as a screen.
+// Exporting a null default component prevents the "missing default export" warning.
+export default function UseHomeData() { return null; }

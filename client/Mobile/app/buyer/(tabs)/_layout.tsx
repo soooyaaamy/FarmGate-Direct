@@ -1,195 +1,198 @@
-/*
-import { icons } from '@/constants/icons';
-import { images } from '@/constants/images';
-import { Tabs } from 'expo-router';
-import React from 'react';
-import { Image, ImageBackground, Text, View } from "react-native";
-
-const TabIcon = ({ focused, icon, title }: any) => {
-  if (focused) {
-    return (
-      <ImageBackground
-        source={images.highlight}
-        className="flex flex-row w-full flex-1 min-w-[90px] min-h-[60px] mt-4 justify-center items-center rounded-full overflow-hidden"
-      >
-        <Image source={icon} tintColor="#151312" className="size-5" />
-        <Text className="text-secondary text-base font-semibold ml-2">
-          {title}
-        </Text>
-      </ImageBackground>
-    );
-  }
-
-  return (
-    <View className="size-full justify-center items-center mt-4 rounded-full">
-      <Image source={icon} tintColor="#A8B5DB" className="size-5" />
-    </View>
-  );
-};
-
-const _layout = () => {
-  return (
-      <Tabs
-        screenOptions={{
-          tabBarShowLabel: false,
-          tabBarItemStyle: {
-            width: '100%',
-            height: "100%",
-            justifyContent: 'center',
-            alignItems: 'center'
-          },
-          tabBarStyle: {
-            backgroundColor: 'green',
-            paddingBottom: 50,
-            position: 'absolute',
-            overflow: 'hidden',
-            borderWidth: 2,
-            borderColor: 'darkgreen'
-          }
-        }}
-      >
-        <Tabs.Screen name="index" options={{
-          headerShown: false,
-          tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={icons.home} title="Home" />
-          )
-        }} />
-
-        <Tabs.Screen name="search" options={{
-          headerShown: false,
-          tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={icons.search} title="Search" />
-          )
-        }} />
-
-        <Tabs.Screen name="qrscanner" options={{
-          headerShown: false,
-          tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={icons.scanner} title="Scanner" />
-          )
-        }} />
-
-        <Tabs.Screen name="cart" options={{
-          headerShown: false,
-          tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={icons.home} title="Cart" />
-          )
-        }} />
-
-        <Tabs.Screen name="profile" options={{
-          headerShown: false,
-          tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={icons.person} title="Profile" />
-          )
-        }} />
-      </Tabs>
-    
-  );
-};
-
-export default _layout;
-*/
 import { Ionicons } from "@expo/vector-icons";
-import { Tabs } from "expo-router";
+import { Tabs, useRouter, useSegments } from "expo-router";
 import React from "react";
-import { Text, View } from "react-native";
-// Tab Icon
-const TabIcon = ({ focused, icon, title }: any) => {
-  return (
-    <View
-      className={`flex flex-row w-full h-full flex-1 min-w-[80px] min-h-[50px]  justify-center
-         items-center rounded-full overflow-hidden
-      ${focused ? "bg-green-800 px-4" : ""}`}
-    >
-      <Ionicons
-        name={focused ? icon : `${icon}-outline`}
-        size={22}
-        color={focused ? "#ffffff" : "#9ca3af"}
-      />
+import {
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
-      {focused && (
-        <Text className="ml-1 text-white font-semibold text-sm">{title}</Text>
-      )}
+// ─── Tab order: Home · Shop · [SCAN] · Alerts · Profile ─────────────────────
+// Scanner is index 2 — the exact center of 5 tabs
+const TABS = [
+  { name: "home",          icon: "home",          label: "Home",    center: false },
+  { name: "shop",          icon: "bag",           label: "Shop",    center: false },
+  { name: "qr-scanner",    icon: "qr-code",       label: "Scan",    center: true  },
+  { name: "notification",  icon: "notifications", label: "Notifications",  center: false },
+  { name: "profile",       icon: "person",        label: "Profile", center: false },
+] as const;
+
+// ─── Custom tab bar ───────────────────────────────────────────────────────────
+function CustomTabBar() {
+  const router   = useRouter();
+  const segments = useSegments();
+  const active   = segments[segments.length - 1] ?? "home";
+
+  return (
+    <View style={styles.barWrapper}>
+      <View style={styles.bar}>
+        {TABS.map((tab) => {
+          const focused = active === tab.name;
+
+          if (tab.center) {
+            // ── Center scanner — raised green circle, sits above the bar ──
+            return (
+              <TouchableOpacity
+                key={tab.name}
+                onPress={() => router.push(`/buyer/(tabs)/${tab.name}` as any)}
+                style={styles.centerItem}
+                activeOpacity={0.8}
+              >
+                {/* Raised circle */}
+                <View style={[styles.scanCircle, focused && styles.scanCircleActive]}>
+                  {/* Green QR icon — white fill ring so it pops on green bg */}
+                  <Ionicons
+                    name="qr-code"
+                    size={26}
+                    color="#15803d"
+                  />
+                </View>
+                <Text style={[styles.label, focused ? styles.labelActive : styles.labelCenter]}>
+                  Scan
+                </Text>
+              </TouchableOpacity>
+            );
+          }
+
+          // ── Regular tab ────────────────────────────────────────────────
+          return (
+            <TouchableOpacity
+              key={tab.name}
+              onPress={() => router.push(`/buyer/(tabs)/${tab.name}` as any)}
+              style={styles.item}
+              activeOpacity={0.75}
+            >
+              <Ionicons
+                name={(focused ? tab.icon : `${tab.icon}-outline`) as any}
+                size={23}
+                color={focused ? "#15803d" : "#9ca3af"}
+              />
+              <Text style={[styles.label, focused && styles.labelActive]}>
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
     </View>
   );
-};
+}
 
-const Layout = () => {
+// ─── Sizes ────────────────────────────────────────────────────────────────────
+const BAR_H   = Platform.OS === "ios" ? 80 : 64;
+const PAD_BOT = Platform.OS === "ios" ? 20 : 0;
+const CIRCLE  = 58; // diameter of raised scanner button
+const LIFT    = 20; // px the circle rises above the bar top
+
+const styles = StyleSheet.create({
+  // Wrapper is taller than the bar so the raised circle has room
+  barWrapper: {
+    position:      "absolute",
+    bottom:        0,
+    left:          0,
+    right:         0,
+    height:        BAR_H + LIFT,
+    // Transparent top area passes touches through to screen content
+    pointerEvents: "box-none",
+  },
+
+  // Visible white bar — anchored to the bottom of the wrapper
+  bar: {
+    position:        "absolute",
+    bottom:          0,
+    left:            0,
+    right:           0,
+    height:          BAR_H,
+    paddingBottom:   PAD_BOT,
+    backgroundColor: "#ffffff",
+    borderTopWidth:  1,
+    borderTopColor:  "#e5e7eb",
+    flexDirection:   "row",
+    alignItems:      "center",
+    shadowColor:     "#000",
+    shadowOffset:    { width: 0, height: -3 },
+    shadowOpacity:   0.07,
+    shadowRadius:    8,
+    elevation:       16,
+  },
+
+  // Regular tab item
+  item: {
+    flex:           1,
+    alignItems:     "center",
+    justifyContent: "center",
+    gap:            4,
+    paddingTop:     3,
+    paddingBottom:  5,
+  },
+
+  // Center item — flex-end so label sits at bar baseline,
+  // circle overflows upward into the wrapper's extra height
+  centerItem: {
+    flex:           1,
+    alignItems:     "center",
+    justifyContent: "flex-end",
+    paddingBottom:  PAD_BOT > 0 ? PAD_BOT - 4 : 6,
+    gap:            4,
+    overflow:       "visible", // critical: allows circle to poke above bar
+  },
+
+  // White raised circle with green icon (qr scanner)
+  scanCircle: {
+    width:           CIRCLE,
+    height:          CIRCLE,
+    borderRadius:    CIRCLE / 2,
+    backgroundColor: "#ffffff",   // white fill so green icon pops
+    alignItems:      "center",
+    justifyContent:  "center",
+    // Push circle up above the bar
+    marginBottom:    LIFT - 20, 
+    // Green border ring
+    borderWidth:     3,
+    borderColor:     "#15803d",
+  },
+
+  scanCircleActive: {
+    backgroundColor: "#f0fdf4", // very light green tint when focused
+  },
+
+  label: {
+    fontSize:   10,
+    color:      "#9ca3af",
+    fontWeight: "400",
+  },
+  labelActive: {
+    color:      "#15803d",
+    fontWeight: "700",
+  },
+  // Scanner label is green even when not focused so it pairs with the green circle
+  labelCenter: {
+    color:      "#15803d",
+    fontWeight: "600",
+  },
+});
+
+// ─── Layout ───────────────────────────────────────────────────────────────────
+export default function Layout() {
   return (
     <Tabs
+      // Completely replace the default tab bar with our custom one
+      tabBar={() => <CustomTabBar />}
       screenOptions={{
-        headerShown: false,
-        tabBarShowLabel: false,
+        headerShown:         false,
         tabBarHideOnKeyboard: true,
-        tabBarStyle: {
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: 60,
-          backgroundColor: "#ffffff",
-          borderTopWidth: 1,
-          borderTopColor: "#e5e7eb",
-          paddingTop: 10
-        },
-        tabBarItemStyle: {
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-        },
       }}
     >
-      {/* Home */}
-      <Tabs.Screen
-        name="home"
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon="home" title="Home" />
-          ),
-        }}
-      />
-
-      {/* Shop */}
-      <Tabs.Screen
-        name="shop"
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon="bag" title="Shop" />
-          ),
-        }}
-      />
-
-      {/* QR */}
-      <Tabs.Screen
-        name="qr"
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon="qr-code" title="QR" />
-          ),
-        }}
-      />
-
-      {/* Cart */}
-      <Tabs.Screen
-        name="cart"
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon="cart" title="Cart" />
-          ),
-        }}
-      />
-
-      {/* Profile */}
-      <Tabs.Screen
-        name="profile"
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon="person" title="Profile" />
-          ),
-        }}
-      />
+      {/* Register screens in the SAME order as TABS array */}
+      <Tabs.Screen name="home"          />
+      <Tabs.Screen name="shop"          />
+      <Tabs.Screen name="qr"           />
+      <Tabs.Screen name="notifications" />
+      <Tabs.Screen name="profile"       />
+      {/* Cart is opened via the header cart icon, not the tab bar */}
+      <Tabs.Screen name="cart" options={{ href: null }} />
     </Tabs>
   );
-};
-
-export default Layout;
+}

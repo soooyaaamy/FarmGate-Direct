@@ -15,7 +15,7 @@
 // ⚠️ CHANGE THIS TO YOUR ACTUAL DEVELOPMENT MACHINE IP
 // Example: "http://192.168.1.5:5000" or "http://192.168.0.100:5000"
 // Use ipconfig on Windows to find your IP address
-const API_BASE_URL = "http://192.168.8.7:5000";
+const API_BASE_URL = "http://192.168.8.19:5000";
 
 export const API_CONFIG = {
   BASE_URL: API_BASE_URL,
