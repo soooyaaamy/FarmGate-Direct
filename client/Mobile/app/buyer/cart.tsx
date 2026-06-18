@@ -1,5 +1,5 @@
 import { useRouter, useFocusEffect } from "expo-router";
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -9,47 +9,29 @@ import {
   Alert,
   ActivityIndicator,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
-
-const API_URL = "http://192.168.8.19:5000";
+import {
+  CartFarmGroup,
+  getCart,
+  removeFromCart,
+  updateCartQty,
+} from "@/lib/store";
 
 export default function Cart() {
   const router = useRouter();
-  const [cartItems, setCartItems] = useState<any[]>([]);
+  const [cartItems, setCartItems] = useState<CartFarmGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
-  const buyerIdRef = useRef<string | null>(null);
 
-  // Load user then fetch cart — runs every time screen is focused
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
-
-      const init = async () => {
+      (async () => {
         setLoading(true);
-        try {
-          const userString = await AsyncStorage.getItem("user");
-          if (!userString) { router.replace("/login"); return; }
-
-          const user = JSON.parse(userString);
-          const id = user.userId;
-          buyerIdRef.current = id;
-
-          const res = await fetch(`${API_URL}/cart/${id}`);
-          if (!res.ok) throw new Error("Failed to fetch cart");
-          const data = await res.json();
-
-          if (!cancelled) setCartItems(data?.farmers || []);
-        } catch (err) {
-          console.error(err);
-          if (!cancelled) Alert.alert("Error", "Could not load your cart.");
-        } finally {
-          if (!cancelled) setLoading(false);
-        }
-      };
-
-      init();
+        const cart = await getCart();
+        if (!cancelled) setCartItems(cart);
+        if (!cancelled) setLoading(false);
+      })();
       return () => { cancelled = true; };
     }, [])
   );
@@ -65,110 +47,78 @@ export default function Cart() {
 
   const toggleFarmSelection = (farmerId: string) => {
     const farmProductIds =
-      cartItems.find(f => f.farmerId === farmerId)?.products.map((p: any) => p.id) || [];
+      cartItems.find(f => f.farmerId === farmerId)?.products.map(p => p.id) || [];
     setSelectedItems(prev => {
       const copy = new Set(prev);
-      const allSelected = farmProductIds.every((id: string) => copy.has(id));
+      const allSelected = farmProductIds.every(id => copy.has(id));
       allSelected
-        ? farmProductIds.forEach((id: string) => copy.delete(id))
-        : farmProductIds.forEach((id: string) => copy.add(id));
+        ? farmProductIds.forEach(id => copy.delete(id))
+        : farmProductIds.forEach(id => copy.add(id));
       return copy;
     });
   };
 
-  // Quantity helpers
-  const updateLocalQty = (farmerId: string, productId: string, qty: number) => {
-    setCartItems(prev =>
-      prev.map(f =>
-        f.farmerId === farmerId
-          ? { ...f, products: f.products.map((p: any) => p.id === productId ? { ...p, quantity: qty } : p) }
-          : f
-      )
-    );
-  };
-
-  const syncQtyToBackend = async (farmerId: string, productId: string, newQty: number, rollbackQty: number) => {
-    const buyerId = buyerIdRef.current;
-    if (!buyerId) return;
-    try {
-      const res = await fetch(`${API_URL}/cart/${buyerId}/${farmerId}/${productId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quantity: newQty }),
-      });
-      if (!res.ok) throw new Error();
-    } catch {
-      updateLocalQty(farmerId, productId, rollbackQty);
-      Alert.alert("Error", "Could not update quantity.");
-    }
-  };
-
-  const incrementQty = (farmerId: string, productId: string) => {
-    const product = cartItems.find(f => f.farmerId === farmerId)?.products.find((p: any) => p.id === productId);
+  // Quantity helpers — optimistic UI, then persisted to AsyncStorage
+  const incrementQty = async (farmerId: string, productId: string) => {
+    const product = cartItems.find(f => f.farmerId === farmerId)?.products.find(p => p.id === productId);
     if (!product) return;
     const newQty = product.quantity + 1;
-    updateLocalQty(farmerId, productId, newQty);
-    syncQtyToBackend(farmerId, productId, newQty, product.quantity);
+    setCartItems(prev =>
+      prev.map(f => f.farmerId === farmerId
+        ? { ...f, products: f.products.map(p => p.id === productId ? { ...p, quantity: newQty } : p) }
+        : f
+      )
+    );
+    await updateCartQty(farmerId, productId, newQty);
   };
 
-  const decrementQty = (farmerId: string, productId: string) => {
-    const product = cartItems.find(f => f.farmerId === farmerId)?.products.find((p: any) => p.id === productId);
+  const decrementQty = async (farmerId: string, productId: string) => {
+    const product = cartItems.find(f => f.farmerId === farmerId)?.products.find(p => p.id === productId);
     if (!product) return;
     if (product.quantity <= 1) { removeItem(farmerId, productId); return; }
     const newQty = product.quantity - 1;
-    updateLocalQty(farmerId, productId, newQty);
-    syncQtyToBackend(farmerId, productId, newQty, product.quantity);
+    setCartItems(prev =>
+      prev.map(f => f.farmerId === farmerId
+        ? { ...f, products: f.products.map(p => p.id === productId ? { ...p, quantity: newQty } : p) }
+        : f
+      )
+    );
+    await updateCartQty(farmerId, productId, newQty);
   };
 
   const removeItem = async (farmerId: string, productId: string) => {
-    const buyerId = buyerIdRef.current;
-    if (!buyerId) return;
-    const backupCart = [...cartItems];
     setCartItems(prev =>
       prev
-        .map(f => f.farmerId === farmerId ? { ...f, products: f.products.filter((p: any) => p.id !== productId) } : f)
+        .map(f => f.farmerId === farmerId ? { ...f, products: f.products.filter(p => p.id !== productId) } : f)
         .filter(f => f.products.length > 0)
     );
     setSelectedItems(prev => { const copy = new Set(prev); copy.delete(productId); return copy; });
-
-    try {
-      const res = await fetch(`${API_URL}/cart/${buyerId}/${farmerId}/${productId}`, { method: "DELETE" });
-      if (!res.ok) throw new Error();
-    } catch {
-      setCartItems(backupCart);
-      Alert.alert("Error", "Could not remove item.");
-    }
-  };
-
-  // Safe price parser — handles both number and "₱10.00" string
-  const parsePrice = (price: any): number => {
-    if (typeof price === "number") return price;
-    if (typeof price === "string") return parseFloat(price.replace(/[^0-9.]/g, "")) || 0;
-    return 0;
+    await removeFromCart(farmerId, productId);
   };
 
   const totalPrice = cartItems.reduce((acc, farm) => {
-    return acc + farm.products.reduce((sum: number, p: any) => {
-      return selectedItems.has(p.id) ? sum + parsePrice(p.price) * p.quantity : sum;
+    return acc + farm.products.reduce((sum, p) => {
+      return selectedItems.has(p.id) ? sum + p.price * p.quantity : sum;
     }, 0);
   }, 0);
 
   const handleCheckout = () => {
-    const buyerId = buyerIdRef.current;
-    if (!buyerId) { Alert.alert("Error", "Buyer not logged in."); return; }
-    if (selectedItems.size === 0) { Alert.alert("No items selected", "Please select at least one item to checkout."); return; }
+    if (selectedItems.size === 0) {
+      Alert.alert("No items selected", "Please select at least one item to checkout.");
+      return;
+    }
 
     const itemsToCheckout = cartItems
       .map(farm => ({
         farmerId: farm.farmerId,
         farmName: farm.farmName,
-        products: farm.products.filter((p: any) => selectedItems.has(p.id)),
+        products: farm.products.filter(p => selectedItems.has(p.id)),
       }))
       .filter(f => f.products.length > 0);
 
     router.push({
       pathname: "/buyer/checkout",
-      params: { items: JSON.stringify(itemsToCheckout), buyerId },
+      params: { items: JSON.stringify(itemsToCheckout) },
     });
   };
 
@@ -186,15 +136,14 @@ export default function Cart() {
     return (
       <View style={{ flex: 1, backgroundColor: "#fff" }}>
         <View style={{
-          backgroundColor: "#15803d",
-          paddingTop: 52, paddingBottom: 20, paddingHorizontal: 20,
+          paddingTop: 52, paddingBottom: 16, paddingHorizontal: 20,
           flexDirection: "row", alignItems: "center", gap: 12,
-          borderBottomLeftRadius: 24, borderBottomRightRadius: 24,
+          borderBottomWidth: 1, borderBottomColor: "#f0f0f0",
         }}>
           <TouchableOpacity onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color="#fff" />
+            <Ionicons name="arrow-back" size={22} color="#111827" />
           </TouchableOpacity>
-          <Text style={{ color: "#fff", fontSize: 18, fontWeight: "800" }}>My Cart</Text>
+          <Text style={{ color: "#111827", fontSize: 17, fontWeight: "700" }}>My Cart</Text>
         </View>
         <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 12, paddingHorizontal: 40 }}>
           <Ionicons name="cart-outline" size={52} color="#d1d5db" />
@@ -208,127 +157,169 @@ export default function Cart() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#fff" }}>
+    <View style={{ flex: 1, backgroundColor: "#f5f5f5" }}>
 
       {/* Header */}
       <View style={{
-        backgroundColor: "#15803d",
-        paddingTop: 52, paddingBottom: 20, paddingHorizontal: 20,
+        backgroundColor: "#fff",
+        paddingTop: 52, paddingBottom: 16, paddingHorizontal: 20,
         flexDirection: "row", alignItems: "center", gap: 12,
-        borderBottomLeftRadius: 24, borderBottomRightRadius: 24,
+        borderBottomWidth: 1, borderBottomColor: "#f0f0f0",
       }}>
         <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+          <Ionicons name="arrow-back" size={22} color="#111827" />
         </TouchableOpacity>
-        <Text style={{ color: "#fff", fontSize: 18, fontWeight: "800" }}>My Cart</Text>
+        <Text style={{ color: "#111827", fontSize: 17, fontWeight: "700" }}>My Cart</Text>
       </View>
 
       <FlatList
         data={cartItems}
         keyExtractor={f => f.farmerId}
-        contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
+        contentContainerStyle={{ padding: 12, paddingBottom: 130 }}
         showsVerticalScrollIndicator={false}
         renderItem={({ item: farm }) => (
-          <View style={{ marginBottom: 24 }}>
+          <View style={{
+            backgroundColor: "#fff",
+            borderRadius: 14,
+            marginBottom: 12,
+            overflow: "hidden",
+          }}>
 
-            {/* Farm row */}
+            {/* Farm header row */}
             <TouchableOpacity
               onPress={() => toggleFarmSelection(farm.farmerId)}
               activeOpacity={0.7}
-              style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 }}
+              style={{
+                flexDirection: "row", alignItems: "center", gap: 10,
+                paddingHorizontal: 14, paddingVertical: 12,
+                borderBottomWidth: 1, borderBottomColor: "#f5f5f5",
+              }}
             >
               <View style={{
-                width: 22, height: 22, borderRadius: 11,
+                width: 20, height: 20, borderRadius: 10,
                 borderWidth: 2, borderColor: "#d1d5db",
                 justifyContent: "center", alignItems: "center",
               }}>
-                {farm.products.every((p: any) => selectedItems.has(p.id)) && (
-                  <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: "#15803d" }} />
+                {farm.products.every(p => selectedItems.has(p.id)) && (
+                  <View style={{ width: 11, height: 11, borderRadius: 6, backgroundColor: "#15803d" }} />
                 )}
               </View>
-              <Ionicons name="storefront-outline" size={16} color="#6b7280" />
-              <Text style={{ fontSize: 14, fontWeight: "700", color: "#111827" }}>{farm.farmName}</Text>
+              <Ionicons name="storefront-outline" size={15} color="#15803d" />
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#111827" }}>{farm.farmName}</Text>
             </TouchableOpacity>
 
             {/* Products */}
-            {farm.products.map((p: any) => (
-              <View key={p.id} style={{
-                flexDirection: "row", alignItems: "center",
-                backgroundColor: "#f9fafb", borderRadius: 14,
-                padding: 12, marginBottom: 10, gap: 10,
-              }}>
+            {farm.products.map((p, idx) => (
+              <View
+                key={p.id}
+                style={{
+                  flexDirection: "row",
+                  paddingHorizontal: 14, paddingVertical: 12,
+                  borderBottomWidth: idx < farm.products.length - 1 ? 1 : 0,
+                  borderBottomColor: "#f5f5f5",
+                  gap: 10,
+                }}
+              >
                 {/* Checkbox */}
                 <TouchableOpacity
                   onPress={() => toggleItemSelection(p.id)}
                   style={{
-                    width: 22, height: 22, borderRadius: 11,
+                    width: 20, height: 20, borderRadius: 10,
                     borderWidth: 2, borderColor: "#d1d5db",
                     justifyContent: "center", alignItems: "center",
+                    marginTop: 2,
                   }}
                 >
                   {selectedItems.has(p.id) && (
-                    <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: "#15803d" }} />
+                    <View style={{ width: 11, height: 11, borderRadius: 6, backgroundColor: "#15803d" }} />
                   )}
                 </TouchableOpacity>
 
                 {/* Image */}
                 <View style={{
-                  width: 72, height: 72, borderRadius: 10,
-                  backgroundColor: "#e5e7eb", overflow: "hidden",
+                  width: 80, height: 80, borderRadius: 10,
+                  backgroundColor: "#f3f4f6", overflow: "hidden",
                 }}>
                   <Image
-                    source={{ uri: p.image }}
+                    source={typeof p.image === "string" ? { uri: p.image } : p.image}
                     style={{ width: "100%", height: "100%" }}
                     resizeMode="cover"
                   />
                 </View>
 
-                {/* Info */}
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 13, fontWeight: "700", color: "#111827" }} numberOfLines={1}>
-                    {p.name}
-                  </Text>
-                  <Text style={{ fontSize: 13, color: "#15803d", fontWeight: "600", marginTop: 2 }}>
-                    ₱{parsePrice(p.price).toFixed(2)}
-                  </Text>
+                {/* Info column */}
+                <View style={{ flex: 1, justifyContent: "space-between", minHeight: 80 }}>
+                  <View>
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#111827" }} numberOfLines={2}>
+                      {p.name}
+                    </Text>
 
-                  {/* Qty controls */}
-                  <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8, gap: 12 }}>
+                    {/* Freshness tag */}
+                    <View style={{
+                      flexDirection: "row", alignItems: "center", gap: 4,
+                      marginTop: 4, alignSelf: "flex-start",
+                      backgroundColor: p.isFresh ? "#f0fdf4" : "#f3f4f6",
+                      paddingHorizontal: 6, paddingVertical: 2,
+                      borderRadius: 6,
+                    }}>
+                      <Ionicons
+                        name={p.isFresh ? "leaf" : "time-outline"}
+                        size={10}
+                        color={p.isFresh ? "#15803d" : "#9ca3af"}
+                      />
+                      <Text style={{
+                        fontSize: 10, fontWeight: "600",
+                        color: p.isFresh ? "#15803d" : "#9ca3af",
+                      }}>
+                        {p.isFresh ? "Fresh" : "Not fresh"}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Price row */}
+                  <Text style={{ fontSize: 14, fontWeight: "800", color: "#111827" }}>
+                    ₱{p.price.toFixed(2)} <Text style={{ fontSize: 10, color: "#9ca3af", fontWeight: "500" }}>/{p.unit}</Text>
+                  </Text>
+                </View>
+
+                {/* Right column: delete on top, stepper below */}
+                <View style={{ alignItems: "flex-end", justifyContent: "space-between", minHeight: 80 }}>
+                  <TouchableOpacity
+                    onPress={() => removeItem(farm.farmerId, p.id)}
+                    style={{ padding: 4 }}
+                  >
+                    <Ionicons name="trash-outline" size={17} color="#9ca3af" />
+                  </TouchableOpacity>
+
+                  <View style={{
+                    flexDirection: "row", alignItems: "center",
+                    borderWidth: 1, borderColor: "#e5e7eb",
+                    borderRadius: 8, overflow: "hidden",
+                  }}>
                     <TouchableOpacity
                       onPress={() => decrementQty(farm.farmerId, p.id)}
-                      style={{
-                        width: 28, height: 28, borderRadius: 8,
-                        backgroundColor: "#e5e7eb",
-                        justifyContent: "center", alignItems: "center",
-                      }}
+                      style={{ width: 26, height: 26, justifyContent: "center", alignItems: "center" }}
                     >
-                      <Ionicons name="remove" size={16} color="#374151" />
+                      <Ionicons name="remove" size={14} color="#374151" />
                     </TouchableOpacity>
 
-                    <Text style={{ fontSize: 14, fontWeight: "700", color: "#111827", minWidth: 20, textAlign: "center" }}>
+                    <Text style={{
+                      fontSize: 12, fontWeight: "700", color: "#111827",
+                      minWidth: 24, textAlign: "center",
+                      borderLeftWidth: 1, borderRightWidth: 1, borderColor: "#e5e7eb",
+                      paddingVertical: 5,
+                    }}>
                       {p.quantity}
                     </Text>
 
                     <TouchableOpacity
                       onPress={() => incrementQty(farm.farmerId, p.id)}
-                      style={{
-                        width: 28, height: 28, borderRadius: 8,
-                        backgroundColor: "#e5e7eb",
-                        justifyContent: "center", alignItems: "center",
-                      }}
+                      style={{ width: 26, height: 26, justifyContent: "center", alignItems: "center" }}
                     >
-                      <Ionicons name="add" size={16} color="#374151" />
+                      <Ionicons name="add" size={14} color="#374151" />
                     </TouchableOpacity>
                   </View>
                 </View>
-
-                {/* Delete */}
-                <TouchableOpacity
-                  onPress={() => removeItem(farm.farmerId, p.id)}
-                  style={{ padding: 6 }}
-                >
-                  <Ionicons name="trash-outline" size={18} color="#ef4444" />
-                </TouchableOpacity>
               </View>
             ))}
           </View>
@@ -345,7 +336,7 @@ export default function Cart() {
       }}>
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 11, color: "#9ca3af" }}>Total</Text>
-          <Text style={{ fontSize: 16, fontWeight: "800", color: "#111827" }}>
+          <Text style={{ fontSize: 17, fontWeight: "800", color: "#111827" }}>
             ₱{totalPrice.toFixed(2)}
           </Text>
         </View>

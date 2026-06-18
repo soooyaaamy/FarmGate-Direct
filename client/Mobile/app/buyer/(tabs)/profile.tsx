@@ -4,8 +4,8 @@ import { useState } from "react";
 import { Image, Text, TouchableOpacity, View } from "react-native";
 
 const MENU_ITEMS = [
-  { key: "orders",        label: "My Orders",        icon: "receipt-outline",      route: "/buyer/profile/orders" },
-  { key: "messages",      label: "Messages",         icon: "chatbubble-ellipses-outline",route: "/buyer/(tabs)/messages" },
+  { key: "orders",        label: "My Orders",        icon: "receipt-outline",      route: "/buyer/profile/my-orders" },
+  { key: "messages",      label: "Messages",         icon: "chatbubble-ellipses-outline",route: "/buyer/profile/messages" },
   { key: "saved",         label: "Saved Farms",      icon: "heart-outline",        route: "/buyer/profile/saved-farms" },
   { key: "address",       label: "Address",          icon: "location-outline",     route: "/buyer/profile/address" },
   { key: "support",       label: "Support",          icon: "help-circle-outline",  route: "/buyer/profile/support" },

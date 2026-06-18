@@ -46,7 +46,9 @@
           "photosPermission": "Allow FarmGate to access your photos to add product images.",
           "cameraPermission": "Allow FarmGate to use your camera to take product photos."
         }
-      ]
+      ],
+      "expo-font",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Alert,
   Image,
@@ -11,27 +11,14 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-
-// ─── ORDER DATA ───────────────────────────────────────────────────────────────
-// In a real app, fetch the order by orderId from your API/context.
-// Here we use a static mock so the page is functional without a backend.
-
-const ORDER = {
-  number: "ORD-12345",
-  farmer: "Juan Dela Cruz",
-  farm: "Green Valley Farm",
-  items: [
-    { id: "1", name: "Fresh Farm Tomatoes", image: require("@/assets/images/tomato.jpg") },
-    { id: "2", name: "Fresh Eggplant",      image: require("@/assets/images/eggplant.jpg") },
-  ],
-};
+import { getOrderById, Order, submitReview } from "@/lib/store";
 
 // ─── STAR ROW ─────────────────────────────────────────────────────────────────
 
 const StarRow = ({
   value,
   onChange,
-  size = 28,
+  size = 26,
 }: {
   value: number;
   onChange: (v: number) => void;
@@ -50,66 +37,243 @@ const StarRow = ({
   </View>
 );
 
+// ─── Per-product review state ──────────────────────────────────────────────
+
+type DraftReview = {
+  productRating: number;
+  farmerRating: number;
+  deliveryRating: number;
+  text: string;
+  photos: string[];
+};
+
+const emptyDraft = (): DraftReview => ({
+  productRating: 0, farmerRating: 0, deliveryRating: 0, text: "", photos: [],
+});
+
+// ─── ProductReviewCard ──────────────────────────────────────────────────────
+
+const ProductReviewCard = ({
+  item,
+  draft,
+  onChange,
+}: {
+  item: Order["items"][number];
+  draft: DraftReview;
+  onChange: (next: DraftReview) => void;
+}) => {
+  const pickImage = async () => {
+    if (draft.photos.length >= 5) {
+      Alert.alert("Limit reached", "You can upload up to 5 photos.");
+      return;
+    }
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission required", "Please allow access to your photo library to add review photos.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: true,
+      selectionLimit: 5 - draft.photos.length,
+      quality: 0.8,
+      allowsEditing: false,
+    });
+    if (!result.canceled) {
+      const uris = result.assets.map((a) => a.uri);
+      onChange({ ...draft, photos: [...draft.photos, ...uris].slice(0, 5) });
+    }
+  };
+
+  const removePhoto = (index: number) => {
+    onChange({ ...draft, photos: draft.photos.filter((_, i) => i !== index) });
+  };
+
+  return (
+    <View style={{
+      backgroundColor: "#fff", borderRadius: 14,
+      padding: 16, marginBottom: 16,
+      borderWidth: 1, borderColor: "#f0f0f0",
+    }}>
+      {/* Product header */}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14 }}>
+        <Image
+          source={typeof item.image === "string" ? { uri: item.image } : item.image}
+          style={{ width: 48, height: 48, borderRadius: 8 }}
+          resizeMode="cover"
+        />
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 13, fontWeight: "700", color: "#111827" }} numberOfLines={1}>
+            {item.productName}
+          </Text>
+          <Text style={{ fontSize: 11, color: "#9ca3af" }} numberOfLines={1}>
+            {item.farmName}
+          </Text>
+        </View>
+      </View>
+
+      {/* Product rating */}
+      <Text style={{ fontSize: 12, fontWeight: "700", color: "#111827", marginBottom: 6 }}>
+        Rate the Product
+      </Text>
+      <StarRow value={draft.productRating} onChange={(v) => onChange({ ...draft, productRating: v })} />
+
+      {/* Farmer rating */}
+      <Text style={{ fontSize: 12, fontWeight: "700", color: "#111827", marginTop: 14, marginBottom: 6 }}>
+        Rate the Farmer
+      </Text>
+      <StarRow value={draft.farmerRating} onChange={(v) => onChange({ ...draft, farmerRating: v })} />
+
+      {/* Delivery rating */}
+      <Text style={{ fontSize: 12, fontWeight: "700", color: "#111827", marginTop: 14, marginBottom: 6 }}>
+        Delivery Experience
+      </Text>
+      <StarRow value={draft.deliveryRating} onChange={(v) => onChange({ ...draft, deliveryRating: v })} />
+
+      {/* Written review */}
+      <Text style={{ fontSize: 12, fontWeight: "700", color: "#111827", marginTop: 14, marginBottom: 6 }}>
+        Write a Review
+      </Text>
+      <TextInput
+        value={draft.text}
+        onChangeText={(t) => onChange({ ...draft, text: t })}
+        multiline
+        numberOfLines={3}
+        placeholder="Share your experience with this product..."
+        placeholderTextColor="#9ca3af"
+        style={{
+          borderWidth: 1, borderColor: "#e5e7eb", borderRadius: 10,
+          padding: 10, fontSize: 12, color: "#111827",
+          minHeight: 70, textAlignVertical: "top",
+        }}
+      />
+
+      {/* Photo upload */}
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 14, marginBottom: 6 }}>
+        <Text style={{ fontSize: 12, fontWeight: "700", color: "#111827" }}>
+          Add Photos <Text style={{ color: "#9ca3af", fontWeight: "400" }}>(optional)</Text>
+        </Text>
+        <Text style={{ fontSize: 10, color: "#9ca3af" }}>{draft.photos.length}/5</Text>
+      </View>
+
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {draft.photos.map((uri, i) => (
+          <View key={i} style={{ position: "relative" }}>
+            <Image source={{ uri }} style={{ width: 60, height: 60, borderRadius: 8 }} resizeMode="cover" />
+            <TouchableOpacity
+              onPress={() => removePhoto(i)}
+              activeOpacity={0.8}
+              style={{
+                position: "absolute", top: -6, right: -6,
+                width: 18, height: 18, borderRadius: 9,
+                backgroundColor: "#dc2626",
+                alignItems: "center", justifyContent: "center",
+              }}
+            >
+              <Ionicons name="close" size={10} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        ))}
+
+        {draft.photos.length < 5 && (
+          <TouchableOpacity
+            onPress={pickImage}
+            activeOpacity={0.7}
+            style={{
+              width: 60, height: 60, borderRadius: 8,
+              borderWidth: 1.5, borderColor: "#d1d5db", borderStyle: "dashed",
+              alignItems: "center", justifyContent: "center", gap: 2,
+            }}
+          >
+            <Ionicons name="camera-outline" size={18} color="#9ca3af" />
+            <Text style={{ fontSize: 8, color: "#9ca3af" }}>Add</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+};
+
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 
 export default function Review() {
   const router = useRouter();
   const params = useLocalSearchParams<{ orderId?: string }>();
 
-  const [productRating,  setProductRating]  = useState(0);
-  const [farmerRating,   setFarmerRating]   = useState(0);
-  const [deliveryRating, setDeliveryRating] = useState(0);
-  const [text,           setText]           = useState("");
-  // Stores local URI strings of picked images
-  const [photos,         setPhotos]         = useState<string[]>([]);
-  const [submitted,      setSubmitted]      = useState(false);
+  const [order, setOrder] = useState<Order | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [drafts, setDrafts] = useState<Record<string, DraftReview>>({});
+  const [submitted, setSubmitted] = useState(false);
 
-  // ── Image picker ────────────────────────────────────────────────────────────
-  const pickImage = async () => {
-    if (photos.length >= 5) {
-      Alert.alert("Limit reached", "You can upload up to 5 photos.");
-      return;
-    }
+  useEffect(() => {
+    (async () => {
+      if (!params.orderId) { setLoading(false); return; }
+      const found = await getOrderById(params.orderId);
+      if (found) {
+        setOrder(found);
+        const initialDrafts: Record<string, DraftReview> = {};
+        found.items.filter((i) => !i.reviewed).forEach((i) => {
+          initialDrafts[i.productId] = emptyDraft();
+        });
+        setDrafts(initialDrafts);
+      }
+      setLoading(false);
+    })();
+  }, [params.orderId]);
 
-    // Ask permission (required on iOS; on Android it auto-prompts)
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert(
-        "Permission required",
-        "Please allow access to your photo library to add review photos."
+  const pendingItems = order?.items.filter((i) => !i.reviewed) ?? [];
+
+  const canSubmit = pendingItems.length > 0 && pendingItems.every((i) => {
+    const d = drafts[i.productId];
+    return d && d.productRating > 0 && d.farmerRating > 0 && d.deliveryRating > 0;
+  });
+
+  const handleSubmit = async () => {
+    if (!canSubmit || !order) return;
+
+    try {
+      await Promise.all(
+        pendingItems.map((item) => {
+          const d = drafts[item.productId];
+          return submitReview({
+            productId: item.productId,
+            orderId: order.id,
+            productRating: d.productRating,
+            farmerRating: d.farmerRating,
+            deliveryRating: d.deliveryRating,
+            text: d.text,
+            photos: d.photos,
+          });
+        })
       );
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsMultipleSelection: true,  // iOS 14+ / Android
-      selectionLimit: 5 - photos.length,
-      quality: 0.8,
-      allowsEditing: false,
-    });
-
-    if (!result.canceled) {
-      const uris = result.assets.map((a) => a.uri);
-      setPhotos((prev) => [...prev, ...uris].slice(0, 5));
+      setSubmitted(true);
+    } catch (e) {
+      console.log(e);
+      Alert.alert("Error", "Could not submit your review. Please try again.");
     }
   };
 
-  const removePhoto = (index: number) => {
-    setPhotos((prev) => prev.filter((_, i) => i !== index));
-  };
+  // ── Loading ──
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#fff", justifyContent: "center", alignItems: "center" }}>
+        <Text style={{ color: "#9ca3af", fontSize: 13 }}>Loading order…</Text>
+      </View>
+    );
+  }
 
-  // ── Submit ──────────────────────────────────────────────────────────────────
-  const canSubmit = productRating > 0 && farmerRating > 0 && deliveryRating > 0;
+  // ── No order found ──
+  if (!order) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#fff", justifyContent: "center", alignItems: "center", padding: 40 }}>
+        <Text style={{ color: "#9ca3af", fontSize: 13, textAlign: "center" }}>
+          We couldn&apos;t find that order.
+        </Text>
+      </View>
+    );
+  }
 
-  const handleSubmit = () => {
-    if (!canSubmit) return; // hard guard — belt-and-suspenders on top of disabled prop
-    // In a real app: POST to your API with ratings, text, and photo URIs.
-    // e.g. await submitReview({ orderId: params.orderId, productRating, farmerRating, deliveryRating, text, photos });
-    setSubmitted(true);
-  };
-
-  // ── Success screen ──────────────────────────────────────────────────────────
+  // ── Success screen ──
   if (submitted) {
     return (
       <View style={{
@@ -125,10 +289,10 @@ export default function Review() {
           <Ionicons name="checkmark-circle" size={44} color="#15803d" />
         </View>
         <Text style={{ fontSize: 17, fontWeight: "800", color: "#111827" }}>
-          Thank you for your review!
+          Thank you for your reviews!
         </Text>
         <Text style={{ fontSize: 13, color: "#9ca3af", textAlign: "center", lineHeight: 19 }}>
-          Your feedback helps other buyers and supports {ORDER.farm}.
+          Your feedback helps other buyers and supports the farmers you ordered from.
         </Text>
         <TouchableOpacity
           onPress={() => router.push("/buyer/(tabs)/home" as any)}
@@ -146,158 +310,59 @@ export default function Review() {
 
   // ── Form ────────────────────────────────────────────────────────────────────
   return (
-    <View style={{ flex: 1, backgroundColor: "#fff" }}>
+    <View style={{ flex: 1, backgroundColor: "#f9fafb" }}>
 
       {/* Header */}
       <View style={{
         paddingTop: 60, paddingHorizontal: 20,
         flexDirection: "row", alignItems: "center", gap: 10,
-        paddingBottom: 12,
+        paddingBottom: 12, backgroundColor: "#fff",
         borderBottomWidth: 1, borderBottomColor: "#f0f0f0",
       }}>
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={22} color="#111827" />
         </TouchableOpacity>
-        <Text style={{ fontSize: 18, fontWeight: "800", color: "#111827" }}>Leave a Review</Text>
+        <Text style={{ fontSize: 17, fontWeight: "800", color: "#111827" }}>Leave a Review</Text>
       </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 60 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 60 }}
         keyboardShouldPersistTaps="handled"
       >
-
-        {/* Order info */}
-        <Text style={{ fontSize: 12, color: "#9ca3af" }}>
-          {ORDER.number} • {ORDER.farm}
+        <Text style={{ fontSize: 12, color: "#9ca3af", marginBottom: 14 }}>
+          {order.id} • Rate each item from your order
         </Text>
 
-        <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
-          {ORDER.items.map((item) => (
-            <View key={item.id} style={{ alignItems: "center", gap: 4 }}>
-              <Image
-                source={item.image}
-                style={{ width: 52, height: 52, borderRadius: 8 }}
-                resizeMode="cover"
-              />
-              <Text style={{ fontSize: 9, color: "#9ca3af", maxWidth: 60 }} numberOfLines={1}>
-                {item.name}
-              </Text>
-            </View>
-          ))}
-        </View>
+        {pendingItems.map((item) => (
+          <ProductReviewCard
+            key={item.productId}
+            item={item}
+            draft={drafts[item.productId] ?? emptyDraft()}
+            onChange={(next) => setDrafts((prev) => ({ ...prev, [item.productId]: next }))}
+          />
+        ))}
 
-        {/* ── Product rating ── */}
-        <Text style={{ fontSize: 13, fontWeight: "700", color: "#111827", marginTop: 24, marginBottom: 8 }}>
-          Rate the Products
-        </Text>
-        <StarRow value={productRating} onChange={setProductRating} />
-
-        {/* ── Farmer rating ── */}
-        <Text style={{ fontSize: 13, fontWeight: "700", color: "#111827", marginTop: 22, marginBottom: 8 }}>
-          Rate the Farmer
-        </Text>
-        <StarRow value={farmerRating} onChange={setFarmerRating} />
-
-        {/* ── Delivery rating (optional) ── */}
-        <Text style={{ fontSize: 13, fontWeight: "700", color: "#111827", marginTop: 22, marginBottom: 8 }}>
-          Delivery Experience{" "}
-        </Text>
-        <StarRow value={deliveryRating} onChange={setDeliveryRating} />
-
-        {/* ── Written review ── */}
-        <Text style={{ fontSize: 13, fontWeight: "700", color: "#111827", marginTop: 22, marginBottom: 8 }}>
-          Write a Review
-        </Text>
-        <TextInput
-          value={text}
-          onChangeText={setText}
-          multiline
-          numberOfLines={4}
-          placeholder="Share your experience with this order..."
-          placeholderTextColor="#9ca3af"
-          style={{
-            borderWidth: 1, borderColor: "#e5e7eb", borderRadius: 10,
-            padding: 12, fontSize: 13, color: "#111827",
-            minHeight: 90, textAlignVertical: "top",
-          }}
-        />
-
-        {/* ── Photo upload ── */}
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 22, marginBottom: 8 }}>
-          <Text style={{ fontSize: 13, fontWeight: "700", color: "#111827" }}>
-            Add Photos{" "}
-            <Text style={{ color: "#9ca3af", fontWeight: "400" }}>(optional, up to 5)</Text>
-          </Text>
-          <Text style={{ fontSize: 11, color: "#9ca3af" }}>{photos.length}/5</Text>
-        </View>
-
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          {/* Picked photo thumbnails */}
-          {photos.map((uri, i) => (
-            <View key={i} style={{ position: "relative" }}>
-              <Image
-                source={{ uri }}
-                style={{ width: 72, height: 72, borderRadius: 10 }}
-                resizeMode="cover"
-              />
-              {/* Remove button */}
-              <TouchableOpacity
-                onPress={() => removePhoto(i)}
-                activeOpacity={0.8}
-                style={{
-                  position: "absolute", top: -6, right: -6,
-                  width: 20, height: 20, borderRadius: 10,
-                  backgroundColor: "#dc2626",
-                  alignItems: "center", justifyContent: "center",
-                }}
-              >
-                <Ionicons name="close" size={11} color="#fff" />
-              </TouchableOpacity>
-            </View>
-          ))}
-
-          {/* Add photo button — hidden when limit reached */}
-          {photos.length < 5 && (
-            <TouchableOpacity
-              onPress={pickImage}
-              activeOpacity={0.7}
-              style={{
-                width: 72, height: 72, borderRadius: 10,
-                borderWidth: 1.5, borderColor: "#d1d5db",
-                borderStyle: "dashed",
-                alignItems: "center", justifyContent: "center",
-                gap: 4,
-              }}
-            >
-              <Ionicons name="camera-outline" size={22} color="#9ca3af" />
-              <Text style={{ fontSize: 9, color: "#9ca3af" }}>Add photo</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* ── Submit ── */}
         <TouchableOpacity
           onPress={handleSubmit}
           disabled={!canSubmit}
           activeOpacity={0.85}
           style={{
-            marginTop: 32, borderRadius: 12, paddingVertical: 14,
+            marginTop: 8, borderRadius: 12, paddingVertical: 14,
             alignItems: "center",
             backgroundColor: canSubmit ? "#15803d" : "#d1fae5",
           }}
         >
           <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>
-            Submit Review
+            Submit {pendingItems.length > 1 ? "Reviews" : "Review"}
           </Text>
         </TouchableOpacity>
 
         {!canSubmit && (
           <Text style={{ textAlign: "center", fontSize: 11, color: "#9ca3af", marginTop: 8 }}>
-            Please rate the products, farmer, and delivery experience to submit your review.
+            Please rate every product, farmer, and delivery experience above to submit.
           </Text>
         )}
-
       </ScrollView>
     </View>
   );

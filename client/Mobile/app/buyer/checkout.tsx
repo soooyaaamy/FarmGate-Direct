@@ -11,50 +11,45 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { API_CONFIG } from "@/constants/api";
+import { clearCartItems, createOrder, CartFarmGroup } from "@/lib/store";
 
 export default function Checkout() {
-  const { buyerId, items } = useLocalSearchParams();
+  const { items } = useLocalSearchParams();
 
-  const [cart, setCart] = useState<any[]>([]);
+  const [cart, setCart] = useState<CartFarmGroup[]>([]);
   const [loading, setLoading] = useState(false);
   const [delivery, setDelivery] = useState<"pickup" | "delivery">("pickup");
   const [payment, setPayment] = useState<"qr" | "cod">("qr");
+  const [buyerId, setBuyerId] = useState<string | null>(null);
   const [buyerName, setBuyerName] = useState<string | null>(null);
 
-  const loadUser = async () => {
-    try {
-      const userString = await AsyncStorage.getItem("user");
-      if (!userString) {
-        router.replace("/login"); // redirect if not logged in
-        return;
-      }
-      const user = JSON.parse(userString);
-      setBuyerName(user.fullName); // <-- and buyerName
-    } catch (error) {
-      console.log(error);
-    }
-  };
-
   useEffect(() => {
-    loadUser();
+    (async () => {
+      try {
+        const userString = await AsyncStorage.getItem("user");
+        if (!userString) { router.replace("/login"); return; }
+        const user = JSON.parse(userString);
+        setBuyerId(user.userId);
+        setBuyerName(user.fullName);
+      } catch (e) {
+        console.log(e);
+      }
+    })();
   }, []);
 
   useEffect(() => {
     if (items) {
-      setCart(JSON.parse(items as string));
+      try {
+        setCart(JSON.parse(items as string));
+      } catch {
+        setCart([]);
+      }
     }
-  }, []);
+  }, [items]);
 
-  // subtotal
+  // ── Accurate math: prices are numbers in the store, never re-parsed from strings ──
   const subTotal = cart.reduce((sum, farm) => {
-    return (
-      sum +
-      farm.products.reduce(
-        (pSum: number, p: any) => pSum + parseFloat(p.price) * p.quantity,
-        0,
-      )
-    );
+    return sum + farm.products.reduce((pSum, p) => pSum + p.price * p.quantity, 0);
   }, 0);
 
   const deliveryFee = delivery === "delivery" ? 35 : 0;
@@ -62,47 +57,60 @@ export default function Checkout() {
 
   const placeOrder = async () => {
     if (!buyerId) {
-      Alert.alert("Error", "Buyer not found");
+      Alert.alert("Error", "Buyer not found. Please log in again.");
+      return;
+    }
+    if (cart.length === 0) {
+      Alert.alert("Error", "Your cart is empty.");
       return;
     }
 
     setLoading(true);
 
     try {
-      const res = await fetch(API_CONFIG.ORDERS.BY_USER(buyerId), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          items: cart,
-          delivery,
-          payment,
-          buyerName,
-        }),
+      const orderItems = cart.flatMap((farm) =>
+        farm.products.map((p) => ({
+          productId: p.id,
+          productName: p.name,
+          farmerId: farm.farmerId,
+          farmName: farm.farmName,
+          image: p.image,
+          price: p.price,
+          quantity: p.quantity,
+          reviewed: false,
+        }))
+      );
+
+      const order = await createOrder({
+        buyerId,
+        buyerName: buyerName ?? "Buyer",
+        items: orderItems,
+        delivery,
+        payment,
+        subTotal,
+        deliveryFee,
+        total,
       });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.message);
-      }
-
-      Alert.alert("Success", "Order placed!");
+      // Remove only the purchased product IDs from the cart, leaving
+      // anything the buyer didn't select untouched.
+      const purchasedIds = new Set(orderItems.map((i) => i.productId));
+      await clearCartItems(purchasedIds);
 
       router.replace({
         pathname: "/buyer/thankyou",
         params: {
+          orderId: order.id,
           delivery,
           payment,
-          subTotal,
-          deliveryFee,
-          total,
+          subTotal: subTotal.toFixed(2),
+          deliveryFee: deliveryFee.toFixed(2),
+          total: total.toFixed(2),
         },
       });
     } catch (err) {
       console.log(err);
-      Alert.alert("Error", "Checkout failed");
+      Alert.alert("Error", "Checkout failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -110,145 +118,179 @@ export default function Checkout() {
 
   if (cart.length === 0) {
     return (
-      <View className="flex-1 justify-center items-center">
-        <Text>No items to checkout</Text>
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#fff" }}>
+        <Text style={{ color: "#9ca3af", fontSize: 14 }}>No items to checkout</Text>
       </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-gray-100">
-      {/* HEADER */}
-      <View className="flex-row items-center px-4 pt-14 pb-4 bg-white">
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={22} />
-        </TouchableOpacity>
+    <View style={{ flex: 1, backgroundColor: "#f3f4f6" }}>
 
-        <Text className="ml-3 text-lg font-semibold">Checkout</Text>
+      {/* Header */}
+      <View style={{
+        flexDirection: "row", alignItems: "center",
+        paddingHorizontal: 16, paddingTop: 56, paddingBottom: 16,
+        backgroundColor: "#fff",
+        borderBottomWidth: 1, borderBottomColor: "#f0f0f0",
+      }}>
+        <TouchableOpacity onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={22} color="#111827" />
+        </TouchableOpacity>
+        <Text style={{ marginLeft: 12, fontSize: 17, fontWeight: "700", color: "#111827" }}>Checkout</Text>
       </View>
 
       <ScrollView
-        className="px-4"
-        contentContainerStyle={{ paddingBottom: 140 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 140 }}
+        showsVerticalScrollIndicator={false}
       >
-        {/* CART ITEMS */}
+        {/* ── Items ── */}
+        <Text style={{ fontSize: 13, fontWeight: "700", color: "#111827", marginBottom: 8 }}>
+          Items
+        </Text>
 
-        <Text className="font-semibold text-base mt-4 mb-2">Items</Text>
+        {cart.map((farm) => (
+          <View key={farm.farmerId} style={{ marginBottom: 8 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
+              <Ionicons name="storefront-outline" size={13} color="#15803d" />
+              <Text style={{ fontSize: 12, fontWeight: "700", color: "#15803d" }}>{farm.farmName}</Text>
+            </View>
 
-        {cart.map((farm: any) =>
-          farm.products.map((p: any) => (
-            <View key={p.id} className="flex-row bg-white p-3 rounded-xl mb-3">
-              <Image
-                source={{ uri: p.image }}
-                className="w-16 h-16 rounded-lg bg-gray-200"
-              />
+            {farm.products.map((p) => (
+              <View key={p.id} style={{
+                flexDirection: "row", alignItems: "center",
+                backgroundColor: "#fff", borderRadius: 12,
+                padding: 12, marginBottom: 8,
+              }}>
+                <Image
+                  source={typeof p.image === "string" ? { uri: p.image } : p.image}
+                  style={{ width: 56, height: 56, borderRadius: 10, backgroundColor: "#f3f4f6" }}
+                  resizeMode="cover"
+                />
 
-              <View className="flex-1 ml-3">
-                <Text className="font-semibold">{p.name}</Text>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: "#111827" }} numberOfLines={1}>
+                    {p.name}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>
+                    ₱{p.price.toFixed(2)} × {p.quantity}
+                  </Text>
+                </View>
 
-                <Text className="text-xs text-gray-500">₱{p.price}</Text>
-
-                <Text className="text-xs text-gray-500 mt-1">
-                  Qty: {p.quantity}
+                <Text style={{ fontSize: 13, fontWeight: "700", color: "#111827" }}>
+                  ₱{(p.price * p.quantity).toFixed(2)}
                 </Text>
               </View>
+            ))}
+          </View>
+        ))}
 
-              <Text className="font-semibold">
-                ₱{(parseFloat(p.price) * p.quantity).toFixed(2)}
-              </Text>
-            </View>
-          )),
-        )}
-
-        {/* DELIVERY */}
-
-        <Text className="font-semibold text-base mt-4 mb-2">Delivery</Text>
+        {/* ── Delivery ── */}
+        <Text style={{ fontSize: 13, fontWeight: "700", color: "#111827", marginTop: 12, marginBottom: 8 }}>
+          Delivery
+        </Text>
 
         <TouchableOpacity
           onPress={() => setDelivery("pickup")}
-          className={`bg-white p-4 rounded-xl mb-3 flex-row items-center ${
-            delivery === "pickup" ? "border border-green-700" : ""
-          }`}
+          activeOpacity={0.8}
+          style={{
+            backgroundColor: "#fff", borderRadius: 12, padding: 14, marginBottom: 8,
+            flexDirection: "row", alignItems: "center", gap: 10,
+            borderWidth: 1.5, borderColor: delivery === "pickup" ? "#15803d" : "transparent",
+          }}
         >
-          <Ionicons name="leaf-outline" size={22} />
-
-          <Text className="ml-3 font-semibold">Farm Pickup</Text>
+          <Ionicons name="leaf-outline" size={20} color={delivery === "pickup" ? "#15803d" : "#374151"} />
+          <Text style={{ fontSize: 13, fontWeight: "600", color: "#111827" }}>Farm Pickup</Text>
+          <Text style={{ marginLeft: "auto", fontSize: 12, color: "#9ca3af" }}>Free</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           onPress={() => setDelivery("delivery")}
-          className={`bg-white p-4 rounded-xl mb-4 flex-row items-center ${
-            delivery === "delivery" ? "border border-green-700" : ""
-          }`}
+          activeOpacity={0.8}
+          style={{
+            backgroundColor: "#fff", borderRadius: 12, padding: 14, marginBottom: 12,
+            flexDirection: "row", alignItems: "center", gap: 10,
+            borderWidth: 1.5, borderColor: delivery === "delivery" ? "#15803d" : "transparent",
+          }}
         >
-          <Ionicons name="car-outline" size={22} />
-
-          <Text className="ml-3 font-semibold">Delivery (+₱35)</Text>
+          <Ionicons name="car-outline" size={20} color={delivery === "delivery" ? "#15803d" : "#374151"} />
+          <Text style={{ fontSize: 13, fontWeight: "600", color: "#111827" }}>Delivery</Text>
+          <Text style={{ marginLeft: "auto", fontSize: 12, color: "#9ca3af" }}>+₱35.00</Text>
         </TouchableOpacity>
 
-        {/* PAYMENT */}
-
-        <Text className="font-semibold text-base mb-2">Payment</Text>
+        {/* ── Payment ── */}
+        <Text style={{ fontSize: 13, fontWeight: "700", color: "#111827", marginBottom: 8 }}>
+          Payment
+        </Text>
 
         <TouchableOpacity
           onPress={() => setPayment("qr")}
-          className={`bg-white p-4 rounded-xl mb-3 flex-row items-center ${
-            payment === "qr" ? "border border-green-700" : ""
-          }`}
+          activeOpacity={0.8}
+          style={{
+            backgroundColor: "#fff", borderRadius: 12, padding: 14, marginBottom: 8,
+            flexDirection: "row", alignItems: "center", gap: 10,
+            borderWidth: 1.5, borderColor: payment === "qr" ? "#15803d" : "transparent",
+          }}
         >
-          <Ionicons name="qr-code-outline" size={22} />
-
-          <Text className="ml-3 font-semibold">GCash</Text>
+          <Ionicons name="qr-code-outline" size={20} color={payment === "qr" ? "#15803d" : "#374151"} />
+          <Text style={{ fontSize: 13, fontWeight: "600", color: "#111827" }}>GCash</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           onPress={() => setPayment("cod")}
-          className={`bg-white p-4 rounded-xl mb-4 flex-row items-center ${
-            payment === "cod" ? "border border-green-700" : ""
-          }`}
+          activeOpacity={0.8}
+          style={{
+            backgroundColor: "#fff", borderRadius: 12, padding: 14, marginBottom: 12,
+            flexDirection: "row", alignItems: "center", gap: 10,
+            borderWidth: 1.5, borderColor: payment === "cod" ? "#15803d" : "transparent",
+          }}
         >
-          <Ionicons name="cash-outline" size={22} />
-
-          <Text className="ml-3 font-semibold">Cash on Delivery</Text>
+          <Ionicons name="cash-outline" size={20} color={payment === "cod" ? "#15803d" : "#374151"} />
+          <Text style={{ fontSize: 13, fontWeight: "600", color: "#111827" }}>Cash on Delivery</Text>
         </TouchableOpacity>
 
-        {/* SUMMARY */}
+        {/* ── Summary ── */}
+        <Text style={{ fontSize: 13, fontWeight: "700", color: "#111827", marginBottom: 8 }}>
+          Summary
+        </Text>
 
-        <Text className="font-semibold text-base mb-2">Summary</Text>
-
-        <View className="bg-white rounded-xl p-4">
-          <View className="flex-row justify-between mb-2">
-            <Text>Subtotal</Text>
-            <Text>₱{subTotal.toFixed(2)}</Text>
+        <View style={{ backgroundColor: "#fff", borderRadius: 12, padding: 14 }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 8 }}>
+            <Text style={{ fontSize: 12, color: "#6b7280" }}>Subtotal</Text>
+            <Text style={{ fontSize: 12, color: "#111827" }}>₱{subTotal.toFixed(2)}</Text>
           </View>
-
-          <View className="flex-row justify-between mb-2">
-            <Text>Delivery Fee</Text>
-            <Text>₱{deliveryFee.toFixed(2)}</Text>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 8 }}>
+            <Text style={{ fontSize: 12, color: "#6b7280" }}>Delivery Fee</Text>
+            <Text style={{ fontSize: 12, color: "#111827" }}>₱{deliveryFee.toFixed(2)}</Text>
           </View>
-
-          <View className="flex-row justify-between">
-            <Text className="font-bold">Total</Text>
-            <Text className="font-bold">₱{total.toFixed(2)}</Text>
+          <View style={{ height: 1, backgroundColor: "#f0f0f0", marginVertical: 4 }} />
+          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+            <Text style={{ fontSize: 14, fontWeight: "800", color: "#111827" }}>Total</Text>
+            <Text style={{ fontSize: 14, fontWeight: "800", color: "#15803d" }}>₱{total.toFixed(2)}</Text>
           </View>
         </View>
       </ScrollView>
 
-      {/* PLACE ORDER */}
-
-      <View className="absolute bottom-0 left-0 right-0 bg-white p-4">
+      {/* Place Order */}
+      <View style={{
+        position: "absolute", bottom: 0, left: 0, right: 0,
+        backgroundColor: "#fff", padding: 16,
+        borderTopWidth: 1, borderTopColor: "#f0f0f0",
+      }}>
         <TouchableOpacity
           disabled={loading}
           onPress={placeOrder}
-          className={`py-4 rounded-xl ${
-            loading ? "bg-gray-400" : "bg-green-700"
-          }`}
+          activeOpacity={0.85}
+          style={{
+            paddingVertical: 14, borderRadius: 12, alignItems: "center",
+            backgroundColor: loading ? "#9ca3af" : "#15803d",
+          }}
         >
           {loading ? (
-            <ActivityIndicator color="white" />
+            <ActivityIndicator color="#fff" />
           ) : (
-            <Text className="text-white text-center font-bold text-lg">
-              Place Order
+            <Text style={{ color: "#fff", fontSize: 15, fontWeight: "700" }}>
+              Place Order · ₱{total.toFixed(2)}
             </Text>
           )}
         </TouchableOpacity>

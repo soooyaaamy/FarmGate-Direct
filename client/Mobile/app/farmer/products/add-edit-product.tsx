@@ -1,22 +1,3 @@
-/**
- * ProductFormModal.tsx
- * ─────────────────────────────────────────────────────────────────────────────
- * Unified Add / Edit product form as a scrollable bottom-sheet modal.
- *
- * Design decisions
- * ─────────────────
- * • Bottom-sheet chosen over centred modal: more natural on mobile, leaves
- *   context visible, easier thumb reach on large phones.
- * • Animated.spring entrance / Animated.timing exit for polished feel.
- * • KeyboardAvoidingView wraps the sheet so inputs are never hidden.
- * • ScrollView inside the sheet lets all fields be reachable on small screens.
- * • Per-field inline error messages — no Alert popups.
- * • Price ceiling per category prevents absurd values.
- * • Units are derived from the selected category so the picker is always
- *   contextually relevant.
- * • "mode" prop: "add" | "edit" — form resets or pre-fills accordingly.
- */
-
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as ImagePicker from "expo-image-picker";
 import React, {

@@ -1,28 +1,5 @@
-/**
- * ─────────────────────────────────────────────────────────────────────────────
- * Two-step confirmation matching the ProductFormModal bottom-sheet aesthetic.
- *
- * Step 1 — "Are you sure?"
- *   Trash icon + product name + reviews-deletion warning.
- *   Cancel (large, prominent) + "Yes, I'm sure" (smaller, destructive).
- *
- * Step 2 — "This is permanent"
- *   Stronger copy + "Delete Permanently" (light-red) + Cancel.
- *
- * Design decisions
- * ─────────────────
- * • Cancel is taller (56 pt) and uses a solid border so it's the easiest
- *   target to hit — satisfies "Cancel more prominent" requirement.
- * • Delete uses light-red bg (#fee2e2) + red text, NOT a solid red fill —
- *   still clearly destructive without alarming the user unnecessarily.
- * • 8 pt gap between buttons prevents accidental misclicks.
- * • Step reset on every open so half-confirmed state never persists.
- * • Same spring-in / timing-out animation as ProductFormModal.
- */
-
-import { useLocalSearchParams, useRouter } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Modal,
@@ -33,7 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { productStore } from "../../../store/productStore";
+
 import { C, shared, T } from "../../../themes/theme";
 
 interface DeleteConfirmationModalProps {
@@ -269,44 +246,3 @@ const d = StyleSheet.create({
     color: C.gray700,
   },
 });
-
-const DeleteProductPage = () => {
-  const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
-
-  const product = useMemo(
-    () => productStore.find((item) => item.id === id),
-    [id]
-  );
-
-  const handleConfirm = () => {
-    if (product) {
-      const index = productStore.findIndex((item) => item.id === product.id);
-      if (index !== -1) productStore.splice(index, 1);
-    }
-    router.back();
-  };
-
-  if (!product) {
-    return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 20 }}>
-        <Text style={{ fontSize: 16, color: "#374151", textAlign: "center" }}>
-          Product not found. Please go back and choose a valid product.
-        </Text>
-      </View>
-    );
-  }
-
-  return (
-    <View style={{ flex: 1, backgroundColor: "transparent" }}>
-      <DeleteConfirmationModal
-        visible
-        productName={product.name}
-        onConfirm={handleConfirm}
-        onCancel={() => router.back()}
-      />
-    </View>
-  );
-};
-
-export default DeleteProductPage;
